@@ -18,9 +18,9 @@ Parameters:
     Description: >-
       Your api http request method.
     Default: 'GET'
-      AllowedValues:
-        - 'GET'
-        - 'POST'
+    AllowedValues:
+      - 'GET'
+      - 'POST'
   Headers:
     Type: CommaDelimitedList
     Description: ->
