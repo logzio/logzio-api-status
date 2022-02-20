@@ -22,8 +22,8 @@ Parameters:
       - 'GET'
       - 'POST'
   Headers:
-    Type: CommaDelimitedList
-    Description: ->
+    Type: String
+    Description: >-
       Your api headers separated by comma and each header's key and value are separated by colon (optional).
   Body:
     Type: String
