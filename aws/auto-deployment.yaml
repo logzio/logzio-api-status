@@ -46,12 +46,13 @@ Parameters:
     Description: >-
       Your api response timeout in seconds.
     Default: 5
-    MinLength: 1
+    MinValue: 1
   ExpectedStatusCode:
     Type: Number
     Description: >-
       The expected http response status code your api should return.
-    MinLength: 1
+    MinValue: 100
+    MaxValue: 599
   ExpectedBody:
     Type: String
     Description: >-
@@ -61,10 +62,10 @@ Parameters:
     Descrition: >-
       If your api url contains sensitive parameters, choose "true" and your url name will be sent
       without the parameters to Logz.io. Otherwise, choose "false"
-    Default: false
+    Default: 'false'
     AllowedValues:
-      - false
-      - true
+      - 'false'
+      - 'true'
   LogzioURL:
     Type: String
     Description: >-
@@ -92,10 +93,6 @@ Parameters:
     Default: rate(30 minutes)
     MinLength: 1
     MaxLength: 256
-Conditions:
-  IsAdditionalSchemaElementsIncluded: !Equals
-    - Ref: ReportAdditionalSchemaElements
-    - INCLUDE
 Resources:
   LambdaFunction:
     Type: 'AWS::Lambda::Function'
