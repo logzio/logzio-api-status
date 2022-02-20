@@ -59,7 +59,7 @@ Parameters:
       The expected http response body your api should return (leave empty if your api http response body is empty).
   SendApiUrlWithoutParams:
     Type: String
-    Descrition: >-
+    Description: >-
       If your api url contains sensitive parameters, choose "true" and your url name will be sent
       without the parameters to Logz.io. Otherwise, choose "false"
     Default: 'false'
