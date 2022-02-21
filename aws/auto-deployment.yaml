@@ -58,15 +58,6 @@ Parameters:
     Type: String
     Description: >-
       The expected http response body your api should return (leave empty if your api http response body is empty).
-  SendApiUrlWithoutParams:
-    Type: String
-    Description: >-
-      If your api url contains sensitive parameters, choose "true" and your url name will be sent
-      without the parameters to Logz.io. Otherwise, choose "false"
-    Default: 'false'
-    AllowedValues:
-      - 'false'
-      - 'true'
   LogzioURL:
     Type: String
     Description: >-
@@ -123,7 +114,6 @@ Resources:
           PASSWORD: !Ref Password
           EXPECTED_STATUS_CODE: !Ref ExpectedStatusCode
           EXPECTED_BODY: !Ref ExpectedBody
-          SEND_API_URL_WITHOUT_PARAMS: !Ref SendApiUrlWithoutParams
           LOGZIO_URL: !Ref LogzioURL
           LOGZIO_TOKEN: !Ref LogzioToken
   IAMRole:
