@@ -51,6 +51,7 @@ Parameters:
     Type: Number
     Description: >-
       The expected http response status code your api should return.
+    Default: 200
     MinValue: 100
     MaxValue: 599
   ExpectedBody:
@@ -69,21 +70,21 @@ Parameters:
   LogzioURL:
     Type: String
     Description: >-
-      The Logz.io listener URL fot your region. (For more details, see the regions page:
+      The Logz.io listener URL for your region. (For more details, see the regions page:
       https://docs.logz.io/user-guide/accounts/account-region.html)
-    Default: 'https://listener.logz.io:8071'
+    Default: 'https://listener.logz.io:8053'
     AllowedValues:
-      - 'https://listener.logz.io:8071'
-      - 'https://listener-au.logz.io:8071'
-      - 'https://listener-ca.logz.io:8071'
-      - 'https://listener-eu.logz.io:8071'
-      - 'https://listener-nl.logz.io:8071'
-      - 'https://listener-uk.logz.io:8071'
-      - 'https://listener-wa.logz.io:8071'
+      - 'https://listener.logz.io:8053'
+      - 'https://listener-au.logz.io:8053'
+      - 'https://listener-ca.logz.io:8053'
+      - 'https://listener-eu.logz.io:8053'
+      - 'https://listener-nl.logz.io:8053'
+      - 'https://listener-uk.logz.io:8053'
+      - 'https://listener-wa.logz.io:8053'
   LogzioToken:
     Type: String
     Description: >-
-      Your Logz.io logs token. (Can be retrieved from the Manage Token page.)
+      Your Logz.io metrics token (Can be retrieved from the Manage Token page).
     MinLength: 1
   CloudWatchEventScheduleExpression:
     Type: String
@@ -128,7 +129,7 @@ Resources:
   IAMRole:
     Type: 'AWS::IAM::Role'
     Properties:
-      RoleName: LogzioApiStatus
+      RoleName: !Ref LambdaFunctionName
       AssumeRolePolicyDocument:
         Version: 2012-10-17
         Statement:
@@ -140,7 +141,7 @@ Resources:
               - 'sts:AssumeRole'
       Path: /
       Policies:
-        - PolicyName: LogzioApiStatus
+        - PolicyName: !Ref LambdaFunctionName
           PolicyDocument:
             Version: 2012-10-17
             Statement:
@@ -153,12 +154,12 @@ Resources:
   EventRule:
     Type: 'AWS::Events::Rule'
     Properties:
-      Name: LogzioApiStatus
+      Name: !Ref LambdaFunctionName
       ScheduleExpression: !Ref CloudWatchEventScheduleExpression
       State: ENABLED
       Targets:
         - Arn: !GetAtt LambdaFunction.Arn
-          Id: LogzioApiStatusLambdaFunction
+          Id: !Ref LambdaFunctionName
   LambdaPermission:
     Type: 'AWS::Lambda::Permission'
     Properties:
