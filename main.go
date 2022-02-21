@@ -42,7 +42,6 @@ type logzioApiStatus struct {
 	password string
 	expectedResponseStatusCode int
 	expectedResponseBody string
-	urlToSend string
 }
 
 type int64GaugeObserver struct {
@@ -62,7 +61,7 @@ type metricRegister interface {
 }
 
 func newLogzioApiStatus() (*logzioApiStatus, error) {
-	log.Debug("Creating LogzioApiStatus object...")
+	log.Debug("Creating logzioApiStatus object...")
 
 	apiURL := os.Getenv("API_URL")
 	parsedURL, err := url.Parse(apiURL)
@@ -72,7 +71,7 @@ func newLogzioApiStatus() (*logzioApiStatus, error) {
 
 	method := os.Getenv("METHOD")
 	if method != "GET" && method != "POST" {
-		return nil, fmt.Errorf("API_HTTP_REQUEST_METHOD must be GET or POST")
+		return nil, fmt.Errorf("METHOD must be GET or POST")
 	}
 
 	headers, err := getApiRequestHeaders()
@@ -87,14 +86,7 @@ func newLogzioApiStatus() (*logzioApiStatus, error) {
 
 	expectedResponseStatusCode, err := strconv.Atoi(os.Getenv("EXPECTED_STATUS_CODE"))
 	if err != nil {
-		return nil, fmt.Errorf("API_HTTP_RESPONSE_STATUS_CODE must be a number")
-	}
-
-	urlToSend := parsedURL.String()
-	if os.Getenv("SEND_API_URL_WITHOUT_PARAMS") == "true" {
-		if strings.Contains(urlToSend, "/?") {
-			urlToSend = strings.Split(urlToSend, "/?")[0]
-		}
+		return nil, fmt.Errorf("EXPECTED_STATUS_CODE must be a number")
 	}
 
 	return &logzioApiStatus{
@@ -108,7 +100,6 @@ func newLogzioApiStatus() (*logzioApiStatus, error) {
 		password: os.Getenv("PASSWORD"),
 		expectedResponseStatusCode: expectedResponseStatusCode,
 		expectedResponseBody: os.Getenv("EXPECTED_BODY"),
-		urlToSend: urlToSend,
 	}, nil
 }
 
@@ -201,7 +192,7 @@ func (las *logzioApiStatus) getResponseErrorStatusGaugeObserver(responseError er
 
 		observerCallback := func(_ context.Context, result metric.Int64ObserverResult) {
 			result.Observe(statusObserverValue,
-				attribute.String("url", las.urlToSend),
+				attribute.String("url", las.url),
 				attribute.String("method", las.method),
 				attribute.String("status", "timeout"),
 				attribute.Float64("response_timeout", float64(las.responseTimeout/time.Second)),
@@ -217,7 +208,7 @@ func (las *logzioApiStatus) getResponseErrorStatusGaugeObserver(responseError er
 
 	observerCallback := func(_ context.Context, result metric.Int64ObserverResult) {
 		result.Observe(statusObserverValue,
-			attribute.String("url", las.urlToSend),
+			attribute.String("url", las.url),
 			attribute.String("method", las.method),
 			attribute.String("status", "connection_failed"),
 			attribute.String("error", responseError.Error()))
@@ -236,7 +227,7 @@ func (las *logzioApiStatus) getReadResponseBodyErrorStatusGaugeObserver(response
 
 	observerCallback := func(_ context.Context, result metric.Int64ObserverResult) {
 		result.Observe(statusObserverValue,
-			attribute.String("url", las.urlToSend),
+			attribute.String("url", las.url),
 			attribute.String("method", las.method),
 			attribute.String("status", "read_response_body_failed"),
 			attribute.Int("response_status_code", responseStatusCode),
@@ -252,7 +243,7 @@ func (las *logzioApiStatus) getNoMatchStatusGaugeObserver(responseStatusCode int
 
 		observerCallback := func(_ context.Context, result metric.Int64ObserverResult) {
 			result.Observe(statusObserverValue,
-				attribute.String("url", las.urlToSend),
+				attribute.String("url", las.url),
 				attribute.String("method", las.method),
 				attribute.String("status", "no_match_status_code"),
 				attribute.Int("response_status_code", responseStatusCode),
@@ -267,7 +258,7 @@ func (las *logzioApiStatus) getNoMatchStatusGaugeObserver(responseStatusCode int
 
 		observerCallback := func(_ context.Context, result metric.Int64ObserverResult) {
 			result.Observe(statusObserverValue,
-				attribute.String("url", las.urlToSend),
+				attribute.String("url", las.url),
 				attribute.String("method", las.method),
 				attribute.String("status", "no_match_response_body"),
 				attribute.Int("response_status_code", responseStatusCode),
@@ -287,7 +278,7 @@ func (las *logzioApiStatus) getSuccessStatusGaugeObserver(responseStatusCode int
 
 	observerCallback := func(_ context.Context, result metric.Int64ObserverResult) {
 		result.Observe(statusObserverValue,
-			attribute.String("url", las.urlToSend),
+			attribute.String("url", las.url),
 			attribute.String("method", las.method),
 			attribute.String("status", "success"),
 			attribute.Int("response_status_code", responseStatusCode))
@@ -301,7 +292,7 @@ func (las *logzioApiStatus) getResponseTimeGaugeObserver(responseTime float64) *
 
 	observerCallback := func(_ context.Context, result metric.Float64ObserverResult) {
 		result.Observe(responseTime,
-			attribute.String("url", las.urlToSend),
+			attribute.String("url", las.url),
 			attribute.String("method", las.method),
 			attribute.String("unit", "seconds"))
 	}
@@ -314,7 +305,7 @@ func (las *logzioApiStatus) getResponseStatusCodeGaugeObserver(response *http.Re
 
 	observerCallback := func(_ context.Context, result metric.Int64ObserverResult) {
 		result.Observe(int64(response.StatusCode),
-			attribute.String("url", las.urlToSend),
+			attribute.String("url", las.url),
 			attribute.String("method", las.method))
 	}
 
@@ -326,7 +317,7 @@ func (las *logzioApiStatus) getResponseBodyLengthGaugeObserver(responseBodyLengt
 
 	observerCallback := func(_ context.Context, result metric.Int64ObserverResult) {
 		result.Observe(int64(responseBodyLength),
-			attribute.String("url", las.urlToSend),
+			attribute.String("url", las.url),
 			attribute.String("method", las.method),
 			attribute.String("unit", "bytes"))
 	}
@@ -337,7 +328,7 @@ func (las *logzioApiStatus) getResponseBodyLengthGaugeObserver(responseBodyLengt
 func getApiRequestHeaders() (map[string]string, error) {
 	var headers map[string]string
 
-	if headersString := os.Getenv("API_HTTP_REQUEST_HEADERS"); headersString != "" {
+	if headersString := os.Getenv("HEADERS"); headersString != "" {
 		if !strings.Contains(headersString, ",") {
 			return nil, fmt.Errorf("headers must be separated by comma")
 		}
@@ -351,6 +342,8 @@ func getApiRequestHeaders() (map[string]string, error) {
 
 			headerKeyAndValue := strings.Split(header, ":")
 			headers[headerKeyAndValue[0]] = headerKeyAndValue[1]
+
+			log.Debug("Got api http request header: ", headerKeyAndValue[0], ": ", headerKeyAndValue[1])
 		}
 	}
 
@@ -448,6 +441,15 @@ func run() error {
 	return collectMetrics(gaugeObservers)
 }
 
+func setLogLevel(level string) {
+	logLevel, err := log.ParseLevel(level)
+	if err != nil {
+		panic(fmt.Errorf("error parsing logger log level: %v", err))
+	}
+
+	log.SetLevel(logLevel)
+}
+
 func handleErr(err error) {
 	if err != nil {
 		panic(fmt.Errorf("something went wrong: %v", err))
@@ -461,9 +463,12 @@ func closeResponseBody(responseBody io.ReadCloser) {
 }
 
 func main() {
+	setLogLevel("debug")
+	log.Info("Starting to get api status...")
+
 	if err := run(); err != nil {
 		panic(err)
 	}
 
-	log.Info("Your api status has been sent to Logz.io successfully")
+	log.Info("The api status has been sent to Logz.io successfully")
 }
