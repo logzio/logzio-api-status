@@ -61,7 +61,7 @@ type metricRegister interface {
 }
 
 func newLogzioApiStatus() (*logzioApiStatus, error) {
-	log.Debug("Creating logzioApiStatus object...")
+	log.Debug("Creating logzio api status...")
 
 	apiURL := os.Getenv("API_URL")
 	parsedURL, err := url.Parse(apiURL)
@@ -329,10 +329,6 @@ func getApiRequestHeaders() (map[string]string, error) {
 	var headers map[string]string
 
 	if headersString := os.Getenv("HEADERS"); headersString != "" {
-		if !strings.Contains(headersString, ",") {
-			return nil, fmt.Errorf("headers must be separated by comma")
-		}
-
 		headers = make(map[string]string)
 
 		for _, header := range strings.Split(headersString, ",") {
@@ -354,16 +350,17 @@ func createController() (*controller.Controller, error) {
 	config := cortex.Config{
 		Endpoint:      os.Getenv("LOGZIO_URL"),
 		RemoteTimeout: 30 * time.Second,
-		PushInterval:  5 * time.Second,
+		PushInterval:  1 * time.Second,
 		BearerToken:   os.Getenv("LOGZIO_TOKEN"),
 	}
 
 	return cortex.InstallNewPipeline(config,
-		controller.WithCollectPeriod(5*time.Second),
+		controller.WithCollectPeriod(1*time.Second),
 		controller.WithResource(
 			resource.NewWithAttributes(
 				semconv.SchemaURL,
 				attribute.String("aws_region", os.Getenv("AWS_REGION")),
+				attribute.String("aws_lambda_function", os.Getenv("AWS_LAMBDA_FUNCTION_NAME")),
 			),
 		),
 	)
@@ -381,8 +378,7 @@ func collectMetrics(metricRegisters []metricRegister) error {
 	defer handleErr(cont.Stop(ctx))
 
 	meter := cont.Meter(meterName)
-	err = cont.Start(ctx)
-	if err != nil {
+	if err = cont.Start(ctx); err != nil {
 		return fmt.Errorf("error starting controller: %v", err)
 	}
 
@@ -390,7 +386,10 @@ func collectMetrics(metricRegisters []metricRegister) error {
 		metricReg.registerMetric(meter)
 	}
 
-	time.Sleep(10 * time.Second)
+	if err = cont.Stop(ctx); err != nil {
+		return fmt.Errorf("error stopping controller: %v", err)
+	}
+
 	return nil
 }
 
@@ -398,7 +397,7 @@ func run() error {
 	gaugeObservers := make([]metricRegister, 0)
 	apiStatus, err := newLogzioApiStatus()
 	if err != nil {
-		return fmt.Errorf("error creating logzioApiStatus: %v", err)
+		return fmt.Errorf("error creating logzio api status: %v", err)
 	}
 
 	request, err := apiStatus.createApiHttpRequest()
