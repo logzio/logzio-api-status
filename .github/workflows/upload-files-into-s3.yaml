@@ -27,7 +27,7 @@ jobs:
           AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           AWS_REGION: us-east-1
           BUCKET_NAME: logzio-aws-integrations-us-east-1
-          BUCKET_DIR: ping-statistics-auto-deployment
+          BUCKET_DIR: api-status-auto-deployment
           SRC_DIR: ../aws
           AUTO_DEPLOYMENT_FILE: auto-deployment.yaml
           FUNCTION_ZIP_FILE: function.zip
