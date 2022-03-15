@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"log"
 	"net"
 	"net/http"
 	"net/url"
@@ -12,8 +13,8 @@ import (
 	"strings"
 	"time"
 
-	log "github.com/sirupsen/logrus"
-	"go.opentelemetry.io/contrib/exporters/metric/cortex"
+	"github.com/aws/aws-lambda-go/lambda"
+	metricsExporter "github.com/logzio/go-metrics-sdk"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/metric"
 	controller "go.opentelemetry.io/otel/sdk/metric/controller/basic"
@@ -22,56 +23,89 @@ import (
 )
 
 const (
-	meterName = "api_status"
-	statusObserverValue = 1
-	statusObserverName = meterName + ".status"
-	statusObserverDescription = "api status"
-	responseTimeObserverName = meterName + ".response_time"
-	statusCodeObserverName = meterName + ".status_code"
-	responseBodyLengthObserverName = meterName + ".response_body_length"
+	apiUrlEnvName                = "API_URL"
+	methodEnvName                = "METHOD"
+	headersEnvName               = "HEADERS"
+	bodyEnvName                  = "BODY"
+	bearerTokenEnvName           = "BEARER_TOKEN"
+	usernameEnvName              = "USERNAME"
+	passwordEnvName              = "PASSWORD"
+	apiResponseTimeoutEnvName    = "API_RESPONSE_TIMEOUT"
+	expectedStatusCodeEnvName    = "EXPECTED_STATUS_CODE"
+	expectedBodyEnvName          = "EXPECTED_BODY"
+	logzioMetricsListenerEnvName = "LOGZIO_METRICS_LISTENER"
+	logzioMetricsTokenEnvName    = "LOGZIO_METRICS_TOKEN"
+	awsRegionEnvName             = "AWS_REGION"
+	awsLambdaFunctionNameEnvName = "AWS_LAMBDA_FUNCTION_NAME"
+	meterName                    = "api_status"
+	statusMetricName             = meterName + "_status"
+	responseTimeMetricName       = meterName + "_response_time"
+	responseBodyLengthMetricName = meterName + "_response_body_length"
+	statusObserverDescription    = "API status status"
+	statusMetricValue            = 1
+)
+
+var (
+	debugLogger = log.New(os.Stdout, "DEBUG: ", log.Ldate|log.Ltime|log.Lshortfile)
+	infoLogger  = log.New(os.Stdout, "INFO: ", log.Ldate|log.Ltime|log.Lshortfile)
 )
 
 type logzioApiStatus struct {
-	url string
-	method string
-	headers map[string]string
-	body string
-	responseTimeout time.Duration
-	bearerToken string
-	username string
-	password string
+	ctx                        context.Context
+	logzioMetricsListener      string
+	logzioMetricsToken         string
+	url                        string
+	method                     string
+	headers                    map[string]string
+	body                       string
+	responseTimeout            time.Duration
+	bearerToken                string
+	username                   string
+	password                   string
 	expectedResponseStatusCode int
-	expectedResponseBody string
+	expectedResponseBody       string
 }
 
 type int64GaugeObserver struct {
-	name string
+	name                  string
 	int64ObserverCallback func(context.Context, metric.Int64ObserverResult)
-	description string
+	description           string
 }
 
 type float64GaugeObserver struct {
-	name string
+	name                    string
 	float64ObserverCallback func(context.Context, metric.Float64ObserverResult)
-	description string
+	description             string
 }
 
 type metricRegister interface {
 	registerMetric(metric.Meter)
 }
 
-func newLogzioApiStatus() (*logzioApiStatus, error) {
-	log.Debug("Creating logzio api status...")
+func newLogzioApiStatus(ctx context.Context) (*logzioApiStatus, error) {
+	logzioMetricsListener := os.Getenv(logzioMetricsListenerEnvName)
+	if logzioMetricsListener == "" {
+		return nil, fmt.Errorf("%s must not be empty", logzioMetricsListenerEnvName)
+	}
 
-	apiURL := os.Getenv("API_URL")
+	logzioMetricsToken := os.Getenv(logzioMetricsTokenEnvName)
+	if logzioMetricsToken == "" {
+		return nil, fmt.Errorf("%s must not be empty", logzioMetricsTokenEnvName)
+	}
+
+	apiURL := os.Getenv(apiUrlEnvName)
+	if apiURL == "" {
+		return nil, fmt.Errorf("%s must not be empty", apiUrlEnvName)
+	}
+
 	parsedURL, err := url.Parse(apiURL)
 	if err != nil {
 		return nil, fmt.Errorf("error parsing url %s: %v", apiURL, err)
 	}
 
-	method := os.Getenv("METHOD")
-	if method != "GET" && method != "POST" {
-		return nil, fmt.Errorf("METHOD must be GET or POST")
+	method := os.Getenv(methodEnvName)
+	if method != http.MethodGet && method != http.MethodPost {
+		return nil, fmt.Errorf("%s must be GET or POST", methodEnvName)
 	}
 
 	headers, err := getApiRequestHeaders()
@@ -79,43 +113,54 @@ func newLogzioApiStatus() (*logzioApiStatus, error) {
 		return nil, fmt.Errorf("error getting api headers: %v", err)
 	}
 
-	responseTimeoutSeconds, err := strconv.Atoi(os.Getenv("API_RESPONSE_TIMEOUT"))
+	responseTimeout, err := strconv.Atoi(os.Getenv(apiResponseTimeoutEnvName))
 	if err != nil {
-		return nil, fmt.Errorf("API_RESPONSE_TIMEOUT must be a number")
+		return nil, fmt.Errorf("%s must be a number", apiResponseTimeoutEnvName)
 	}
 
-	expectedResponseStatusCode, err := strconv.Atoi(os.Getenv("EXPECTED_STATUS_CODE"))
+	if responseTimeout < 1 {
+		return nil, fmt.Errorf("%s must be a positive number", apiResponseTimeoutEnvName)
+	}
+
+	expectedResponseStatusCode, err := strconv.Atoi(os.Getenv(expectedStatusCodeEnvName))
 	if err != nil {
-		return nil, fmt.Errorf("EXPECTED_STATUS_CODE must be a number")
+		return nil, fmt.Errorf("%s must be a number", expectedStatusCodeEnvName)
+	}
+
+	if expectedResponseStatusCode < 100 || expectedResponseStatusCode > 599 {
+		return nil, fmt.Errorf("%s must be a between 100 and 599 (inclusive)", apiResponseTimeoutEnvName)
 	}
 
 	return &logzioApiStatus{
-		url: parsedURL.String(),
-		method: method,
-		headers: headers,
-		body: os.Getenv("BODY"),
-		responseTimeout: time.Duration(responseTimeoutSeconds) * time.Second,
-		bearerToken: os.Getenv("BEARER_TOKEN"),
-		username: os.Getenv("USERNAME"),
-		password: os.Getenv("PASSWORD"),
+		ctx:                        ctx,
+		logzioMetricsListener:      logzioMetricsListener,
+		logzioMetricsToken:         logzioMetricsToken,
+		url:                        parsedURL.String(),
+		method:                     method,
+		headers:                    headers,
+		body:                       os.Getenv(bodyEnvName),
+		responseTimeout:            time.Duration(responseTimeout) * time.Second,
+		bearerToken:                os.Getenv(bearerTokenEnvName),
+		username:                   os.Getenv(usernameEnvName),
+		password:                   os.Getenv(passwordEnvName),
 		expectedResponseStatusCode: expectedResponseStatusCode,
-		expectedResponseBody: os.Getenv("EXPECTED_BODY"),
+		expectedResponseBody:       os.Getenv(expectedBodyEnvName),
 	}, nil
 }
 
 func newInt64GaugeObserver(name string, observerCallback func(context.Context, metric.Int64ObserverResult), description string) *int64GaugeObserver {
 	return &int64GaugeObserver{
-		name: name,
+		name:                  name,
 		int64ObserverCallback: observerCallback,
-		description: description,
+		description:           description,
 	}
 }
 
 func newFloat64GaugeObserver(name string, observerCallback func(context.Context, metric.Float64ObserverResult), description string) *float64GaugeObserver {
 	return &float64GaugeObserver{
-		name: name,
+		name:                    name,
 		float64ObserverCallback: observerCallback,
-		description: description,
+		description:             description,
 	}
 }
 
@@ -136,7 +181,7 @@ func (fgo *float64GaugeObserver) registerMetric(meter metric.Meter) {
 }
 
 func (las *logzioApiStatus) createApiHttpRequest() (*http.Request, error) {
-	log.Debug("Creating api http request...")
+	debugLogger.Println("Creating API HTTP request...")
 
 	var bodyReader io.Reader
 
@@ -168,65 +213,65 @@ func (las *logzioApiStatus) createApiHttpRequest() (*http.Request, error) {
 	return request, nil
 }
 
-func (las *logzioApiStatus) getApiHttpResponse(request *http.Request) (*http.Response, error, float64) {
-	log.Debug("Getting api http response...")
+func (las *logzioApiStatus) getApiHttpResponse(request *http.Request) (*http.Response, float64, error) {
+	debugLogger.Println("Getting API HTTP response...")
 
 	client := &http.Client{
-		Timeout: las.responseTimeout * time.Second,
+		Transport: http.DefaultTransport,
+		Timeout:   las.responseTimeout * time.Second,
 	}
 	start := time.Now()
 	response, err := client.Do(request)
 	responseTime := time.Since(start).Seconds()
 
-	return response, err, responseTime
+	return response, responseTime, err
 }
 
 func (las *logzioApiStatus) getResponseErrorStatusGaugeObserver(responseError error) *int64GaugeObserver {
 	if responseError == nil {
-		log.Debug("No response error status")
+		debugLogger.Println("No response error status")
 		return nil
 	}
 
 	if timeoutError, ok := responseError.(net.Error); ok && timeoutError.Timeout() {
-		log.Debug("Getting response timeout status observer...")
-
 		observerCallback := func(_ context.Context, result metric.Int64ObserverResult) {
-			result.Observe(statusObserverValue,
+			debugLogger.Println("Running response timeout status observer callback...")
+
+			result.Observe(statusMetricValue,
 				attribute.String("url", las.url),
 				attribute.String("method", las.method),
-				attribute.String("status", "timeout"),
+				attribute.String("status", "response_timeout"),
 				attribute.Float64("response_timeout", float64(las.responseTimeout/time.Second)),
 				attribute.String("response_timeout_unit", "seconds"),
 				attribute.String("error", responseError.Error()))
 		}
 
-		return newInt64GaugeObserver(statusObserverName, observerCallback, statusObserverDescription)
-
+		return newInt64GaugeObserver(statusMetricName, observerCallback, statusObserverDescription)
 	}
 
-	log.Debug("Getting response connection failed status observer...")
-
 	observerCallback := func(_ context.Context, result metric.Int64ObserverResult) {
-		result.Observe(statusObserverValue,
+		debugLogger.Println("Running connection failed status observer callback...")
+
+		result.Observe(statusMetricValue,
 			attribute.String("url", las.url),
 			attribute.String("method", las.method),
 			attribute.String("status", "connection_failed"),
 			attribute.String("error", responseError.Error()))
 	}
 
-	return newInt64GaugeObserver(statusObserverName, observerCallback, statusObserverDescription)
+	return newInt64GaugeObserver(statusMetricName, observerCallback, statusObserverDescription)
 }
 
 func (las *logzioApiStatus) getReadResponseBodyErrorStatusGaugeObserver(responseStatusCode int, readResponseBodyError error) *int64GaugeObserver {
 	if readResponseBodyError == nil {
-		log.Debug("No read response body error status")
+		debugLogger.Println("No read response body error status")
 		return nil
 	}
 
-	log.Debug("Getting read response body error status observer...")
-
 	observerCallback := func(_ context.Context, result metric.Int64ObserverResult) {
-		result.Observe(statusObserverValue,
+		debugLogger.Println("Running read response body failed status observer callback...")
+
+		result.Observe(statusMetricValue,
 			attribute.String("url", las.url),
 			attribute.String("method", las.method),
 			attribute.String("status", "read_response_body_failed"),
@@ -234,15 +279,15 @@ func (las *logzioApiStatus) getReadResponseBodyErrorStatusGaugeObserver(response
 			attribute.String("error", readResponseBodyError.Error()))
 	}
 
-	return newInt64GaugeObserver(statusObserverName, observerCallback, statusObserverDescription)
+	return newInt64GaugeObserver(statusMetricName, observerCallback, statusObserverDescription)
 }
 
 func (las *logzioApiStatus) getNoMatchStatusGaugeObserver(responseStatusCode int, responseBodyBytes []byte) *int64GaugeObserver {
 	if responseStatusCode != las.expectedResponseStatusCode {
-		log.Debug("Getting no match status code status observer...")
-
 		observerCallback := func(_ context.Context, result metric.Int64ObserverResult) {
-			result.Observe(statusObserverValue,
+			debugLogger.Println("Running no match status code status observer callback...")
+
+			result.Observe(statusMetricValue,
 				attribute.String("url", las.url),
 				attribute.String("method", las.method),
 				attribute.String("status", "no_match_status_code"),
@@ -250,14 +295,14 @@ func (las *logzioApiStatus) getNoMatchStatusGaugeObserver(responseStatusCode int
 				attribute.Int("expected_response_status_code", las.expectedResponseStatusCode))
 		}
 
-		return newInt64GaugeObserver(statusObserverName, observerCallback, statusObserverDescription)
+		return newInt64GaugeObserver(statusMetricName, observerCallback, statusObserverDescription)
 	}
 
 	if string(responseBodyBytes) != las.expectedResponseBody {
-		log.Debug("Getting no match response body status observer...")
-
 		observerCallback := func(_ context.Context, result metric.Int64ObserverResult) {
-			result.Observe(statusObserverValue,
+			debugLogger.Println("Running no match response body status observer callback...")
+
+			result.Observe(statusMetricValue,
 				attribute.String("url", las.url),
 				attribute.String("method", las.method),
 				attribute.String("status", "no_match_response_body"),
@@ -266,154 +311,132 @@ func (las *logzioApiStatus) getNoMatchStatusGaugeObserver(responseStatusCode int
 				attribute.String("expected_response_body", las.expectedResponseBody))
 		}
 
-		return newInt64GaugeObserver(statusObserverName, observerCallback, statusObserverDescription)
+		return newInt64GaugeObserver(statusMetricName, observerCallback, statusObserverDescription)
 	}
 
-	log.Debug("No no match status")
+	debugLogger.Println("No no match status")
 	return nil
 }
 
 func (las *logzioApiStatus) getSuccessStatusGaugeObserver(responseStatusCode int) *int64GaugeObserver {
-	log.Debug("Getting success status observer...")
-
 	observerCallback := func(_ context.Context, result metric.Int64ObserverResult) {
-		result.Observe(statusObserverValue,
+		debugLogger.Println("Running success status observer callback...")
+		result.Observe(statusMetricValue,
 			attribute.String("url", las.url),
 			attribute.String("method", las.method),
 			attribute.String("status", "success"),
 			attribute.Int("response_status_code", responseStatusCode))
 	}
 
-	return newInt64GaugeObserver(statusObserverName, observerCallback, statusObserverDescription)
+	return newInt64GaugeObserver(statusMetricName, observerCallback, statusObserverDescription)
 }
 
 func (las *logzioApiStatus) getResponseTimeGaugeObserver(responseTime float64) *float64GaugeObserver {
-	log.Debug("Getting response time observer...")
-
 	observerCallback := func(_ context.Context, result metric.Float64ObserverResult) {
+		debugLogger.Println("Running response time observer callback...")
+
 		result.Observe(responseTime,
 			attribute.String("url", las.url),
 			attribute.String("method", las.method),
 			attribute.String("unit", "seconds"))
 	}
 
-	return newFloat64GaugeObserver(responseTimeObserverName, observerCallback, "api response time")
-}
-
-func (las *logzioApiStatus) getResponseStatusCodeGaugeObserver(response *http.Response) *int64GaugeObserver {
-	log.Debug("Getting response status code observer...")
-
-	observerCallback := func(_ context.Context, result metric.Int64ObserverResult) {
-		result.Observe(int64(response.StatusCode),
-			attribute.String("url", las.url),
-			attribute.String("method", las.method))
-	}
-
-	return newInt64GaugeObserver(statusCodeObserverName, observerCallback, "api status code")
+	return newFloat64GaugeObserver(responseTimeMetricName, observerCallback, "API status response time")
 }
 
 func (las *logzioApiStatus) getResponseBodyLengthGaugeObserver(responseBodyLength int) *int64GaugeObserver {
-	log.Debug("Getting response body length observer...")
-
 	observerCallback := func(_ context.Context, result metric.Int64ObserverResult) {
+		debugLogger.Println("Running response body length observer callback...")
+
 		result.Observe(int64(responseBodyLength),
 			attribute.String("url", las.url),
 			attribute.String("method", las.method),
 			attribute.String("unit", "bytes"))
 	}
 
-	return newInt64GaugeObserver(responseBodyLengthObserverName, observerCallback, "api response body length")
+	return newInt64GaugeObserver(responseBodyLengthMetricName, observerCallback, "API status response body length")
 }
 
 func getApiRequestHeaders() (map[string]string, error) {
 	var headers map[string]string
 
-	if headersString := os.Getenv("HEADERS"); headersString != "" {
+	if headersString := os.Getenv(headersEnvName); headersString != "" {
 		headers = make(map[string]string)
 
 		for _, header := range strings.Split(headersString, ",") {
-			if !strings.Contains(header, ":") {
-				return nil, fmt.Errorf("header's key and value must be separated by colon")
+			if !strings.Contains(header, "=") {
+				return nil, fmt.Errorf("header's key and value must be separated by '='")
 			}
 
-			headerKeyAndValue := strings.Split(header, ":")
+			header = strings.Replace(header, " ", "", -1)
+			headerKeyAndValue := strings.Split(header, "=")
 			headers[headerKeyAndValue[0]] = headerKeyAndValue[1]
 
-			log.Debug("Got api http request header: ", headerKeyAndValue[0], ": ", headerKeyAndValue[1])
+			debugLogger.Println("Got API HTTP request header:", headerKeyAndValue[0], "=", headerKeyAndValue[1])
 		}
 	}
 
 	return headers, nil
 }
 
-func createController() (*controller.Controller, error) {
-	config := cortex.Config{
-		Endpoint:      os.Getenv("LOGZIO_URL"),
-		RemoteTimeout: 30 * time.Second,
-		PushInterval:  1 * time.Second,
-		BearerToken:   os.Getenv("LOGZIO_TOKEN"),
+func (las *logzioApiStatus) createController() (*controller.Controller, error) {
+	config := metricsExporter.Config{
+		LogzioMetricsListener: las.logzioMetricsListener,
+		LogzioMetricsToken:    las.logzioMetricsToken,
+		RemoteTimeout:         30 * time.Second,
+		PushInterval:          15 * time.Second,
 	}
 
-	return cortex.InstallNewPipeline(config,
-		controller.WithCollectPeriod(1*time.Second),
+	return metricsExporter.InstallNewPipeline(config,
+		controller.WithCollectPeriod(5*time.Second),
 		controller.WithResource(
 			resource.NewWithAttributes(
 				semconv.SchemaURL,
-				attribute.String("aws_region", os.Getenv("AWS_REGION")),
-				attribute.String("aws_lambda_function", os.Getenv("AWS_LAMBDA_FUNCTION_NAME")),
+				attribute.String("aws_region", os.Getenv(awsRegionEnvName)),
+				attribute.String("aws_lambda_function", os.Getenv(awsLambdaFunctionNameEnvName)),
 			),
 		),
 	)
 }
 
-func collectMetrics(metricRegisters []metricRegister) error {
-	log.Debug("Collecting metrics...")
-
-	ctx := context.Background()
-	cont, err := createController()
+func (las *logzioApiStatus) collectMetrics(metricRegisters []metricRegister) error {
+	cont, err := las.createController()
 	if err != nil {
 		return fmt.Errorf("error creating controller: %v", err)
 	}
 
-	defer handleErr(cont.Stop(ctx))
+	debugLogger.Println("Collecting metrics...")
+
+	defer func() {
+		handleErr(cont.Stop(las.ctx))
+	}()
 
 	meter := cont.Meter(meterName)
-	if err = cont.Start(ctx); err != nil {
-		return fmt.Errorf("error starting controller: %v", err)
-	}
 
 	for _, metricReg := range metricRegisters {
 		metricReg.registerMetric(meter)
 	}
 
-	if err = cont.Stop(ctx); err != nil {
-		return fmt.Errorf("error stopping controller: %v", err)
-	}
-
 	return nil
 }
 
-func run() error {
+func run(ctx context.Context) error {
 	gaugeObservers := make([]metricRegister, 0)
-	apiStatus, err := newLogzioApiStatus()
+	apiStatus, err := newLogzioApiStatus(ctx)
 	if err != nil {
-		return fmt.Errorf("error creating logzio api status: %v", err)
+		return fmt.Errorf("error creating logzioApiStatus instance: %v", err)
 	}
 
 	request, err := apiStatus.createApiHttpRequest()
 	if err != nil {
-		return fmt.Errorf("error creating api http request: %v", err)
+		return fmt.Errorf("error creating API HTTP request: %v", err)
 	}
 
-	log.Debug("Api http request was created successfully")
-
-	response, err, responseTime := apiStatus.getApiHttpResponse(request)
+	response, responseTime, err := apiStatus.getApiHttpResponse(request)
 	if statusGaugeObserver := apiStatus.getResponseErrorStatusGaugeObserver(err); statusGaugeObserver != nil {
 		gaugeObservers = append(gaugeObservers, statusGaugeObserver)
-		return collectMetrics(gaugeObservers)
+		return apiStatus.collectMetrics(gaugeObservers)
 	}
-
-	log.Debug("Api http response was received successfully")
 
 	responseTimeGaugeObserver := apiStatus.getResponseTimeGaugeObserver(responseTime)
 	gaugeObservers = append(gaugeObservers, responseTimeGaugeObserver)
@@ -423,7 +446,7 @@ func run() error {
 	bodyBytes, err := io.ReadAll(response.Body)
 	if statusGaugeObserver := apiStatus.getReadResponseBodyErrorStatusGaugeObserver(response.StatusCode, err); statusGaugeObserver != nil {
 		gaugeObservers = append(gaugeObservers, statusGaugeObserver)
-		return collectMetrics(gaugeObservers)
+		return apiStatus.collectMetrics(gaugeObservers)
 	}
 
 	responseBodyLengthGaugeObserver := apiStatus.getResponseBodyLengthGaugeObserver(len(bodyBytes))
@@ -431,22 +454,13 @@ func run() error {
 
 	if statusGaugeObserver := apiStatus.getNoMatchStatusGaugeObserver(response.StatusCode, bodyBytes); statusGaugeObserver != nil {
 		gaugeObservers = append(gaugeObservers, statusGaugeObserver)
-		return collectMetrics(gaugeObservers)
+		return apiStatus.collectMetrics(gaugeObservers)
 	}
 
 	statusGaugeObserver := apiStatus.getSuccessStatusGaugeObserver(response.StatusCode)
 	gaugeObservers = append(gaugeObservers, statusGaugeObserver)
 
-	return collectMetrics(gaugeObservers)
-}
-
-func setLogLevel(level string) {
-	logLevel, err := log.ParseLevel(level)
-	if err != nil {
-		panic(fmt.Errorf("error parsing logger log level: %v", err))
-	}
-
-	log.SetLevel(logLevel)
+	return apiStatus.collectMetrics(gaugeObservers)
 }
 
 func handleErr(err error) {
@@ -461,13 +475,17 @@ func closeResponseBody(responseBody io.ReadCloser) {
 	}
 }
 
-func main() {
-	setLogLevel("debug")
-	log.Info("Starting to get api status...")
+func HandleRequest(ctx context.Context) error {
+	infoLogger.Println("Starting to get API status...")
 
-	if err := run(); err != nil {
-		panic(err)
+	if err := run(ctx); err != nil {
+		return err
 	}
 
-	log.Info("The api status has been sent to Logz.io successfully")
+	infoLogger.Println("API status has been sent to Logz.io successfully")
+	return nil
+}
+
+func main() {
+	lambda.Start(HandleRequest)
 }
