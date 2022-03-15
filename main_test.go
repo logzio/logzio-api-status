@@ -626,7 +626,7 @@ func TestCollectMetrics_AllMetrics(t *testing.T) {
 				} else if metric["__name__"] == responseTimeMetricName {
 					assert.Len(t, metric, 7)
 					assert.Equal(t, responseTime, metric["value"])
-					assert.Equal(t, "seconds", metric["unit"])
+					assert.Equal(t, "milliseconds", metric["unit"])
 				} else if metric["__name__"] == responseBodyLengthMetricName {
 					assert.Len(t, metric, 7)
 					assert.Equal(t, float64(len(bodyBytes)), metric["value"])
@@ -856,7 +856,7 @@ func TestRun_NoMatchStatusCodeStatus(t *testing.T) {
 				} else if metric["__name__"] == responseTimeMetricName {
 					assert.Len(t, metric, 7)
 					assert.NotEmpty(t, metric["value"])
-					assert.Equal(t, "seconds", metric["unit"])
+					assert.Equal(t, "milliseconds", metric["unit"])
 				} else if metric["__name__"] == responseBodyLengthMetricName {
 					assert.Len(t, metric, 7)
 					assert.Equal(t, float64(len("success")), metric["value"])
@@ -939,7 +939,7 @@ func TestRun_NoMatchResponseBodyStatus(t *testing.T) {
 				} else if metric["__name__"] == responseTimeMetricName {
 					assert.Len(t, metric, 7)
 					assert.NotEmpty(t, metric["value"])
-					assert.Equal(t, "seconds", metric["unit"])
+					assert.Equal(t, "milliseconds", metric["unit"])
 				} else if metric["__name__"] == responseBodyLengthMetricName {
 					assert.Len(t, metric, 7)
 					assert.Equal(t, float64(len("success")), metric["value"])
