@@ -102,6 +102,8 @@ Resources:
       Timeout: 300
       MemorySize: 1024
       ReservedConcurrentExecutions: 1
+      Layers:
+        - !Ref LambdaLayer
       Environment:
         Variables:
           API_URL: !Ref ApiURL
@@ -141,6 +143,12 @@ Resources:
                   - 'logs:CreateLogStream'
                   - 'logs:PutLogEvents'
                 Resource: '*'
+  LambdaLayer:
+    Type: 'AWS::Lambda::LayerVersion'
+    Properties:
+      Content:
+        S3Bucket: logzio-aws-lambda-layers-us-east-1
+        S3Key: lambda-extensions-logs/layer.zip
   EventRule:
     Type: 'AWS::Events::Rule'
     Properties:
