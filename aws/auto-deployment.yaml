@@ -11,12 +11,12 @@ Parameters:
   ApiURL:
     Type: String
     Description: >-
-      Your api url to collect status from.
+      Your API URL to collect status from.
     MinLength: 1
   Method:
     Type: String
     Description: >-
-      Your api http request method.
+      Your API HTTP request method.
     Default: 'GET'
     AllowedValues:
       - 'GET'
@@ -24,60 +24,65 @@ Parameters:
   Headers:
     Type: String
     Description: >-
-      Your api headers separated by comma and each header's key and value are separated by colon (optional).
+      Your API headers separated by comma and each header's key and value are separated by `=` (optional).
   Body:
     Type: String
     Description: >-
-      Your api http request body (optional).
+      Your API HTTP request body (optional).
   BearerToken:
     Type: String
     Description: >-
-      Your api bearer token (optional).
+      Your API bearer token (optional).
   Username:
     Type: String
     Description: >-
-      Your api username (optional).
+      Your API username (optional).
   Password:
     Type: String
     Description: >-
-      Your api password (optional).
+      Your API password (optional).
   ApiResponseTimeout:
     Type: Number
     Description: >-
-      Your api response timeout in seconds.
-    Default: 5
+      Your API response timeout (seconds).
+    Default: 10
     MinValue: 1
   ExpectedStatusCode:
     Type: Number
     Description: >-
-      The expected http response status code your api should return.
+      The expected HTTP response status code your API should return.
     Default: 200
     MinValue: 100
     MaxValue: 599
   ExpectedBody:
     Type: String
     Description: >-
-      The expected http response body your api should return (leave empty if your api http response body is empty).
-  LogzioURL:
+      The expected HTTP response body your API should return (leave empty if your API HTTP response body is empty).
+  LogzioListener:
     Type: String
     Description: >-
       The Logz.io listener URL for your region. (For more details, see the regions page:
       https://docs.logz.io/user-guide/accounts/account-region.html)
-    Default: 'https://listener.logz.io:8053'
+    Default: 'https://listener.logz.io'
     AllowedValues:
-      - 'https://listener.logz.io:8053'
-      - 'https://listener-au.logz.io:8053'
-      - 'https://listener-ca.logz.io:8053'
-      - 'https://listener-eu.logz.io:8053'
-      - 'https://listener-nl.logz.io:8053'
-      - 'https://listener-uk.logz.io:8053'
-      - 'https://listener-wa.logz.io:8053'
-  LogzioToken:
+      - 'https://listener.logz.io'
+      - 'https://listener-au.logz.io'
+      - 'https://listener-ca.logz.io'
+      - 'https://listener-eu.logz.io'
+      - 'https://listener-nl.logz.io'
+      - 'https://listener-uk.logz.io'
+      - 'https://listener-wa.logz.io'
+  LogzioMetricsToken:
     Type: String
     Description: >-
       Your Logz.io metrics token (Can be retrieved from the Manage Token page).
     MinLength: 1
-  CloudWatchEventScheduleExpression:
+  LogzioLogsToken:
+    Type: String
+    Description: >-
+      Your Logz.io logs token (Can be retrieved from the Manage Token page).
+    MinLength: 1
+  SchedulingInterval:
     Type: String
     Description: >-
       The scheduling expression that determines when and how often the Lambda
@@ -96,14 +101,14 @@ Resources:
       Description: >-
         Lambda function for collecting API status metrics and sending
         them to Logz.io.
-      Handler: main
+      Handler: bootstrap
       Role: !GetAtt IAMRole.Arn
-      Runtime: go1.x
+      Runtime: provided.al2
       Timeout: 300
       MemorySize: 1024
       ReservedConcurrentExecutions: 1
       Layers:
-        - !Ref LambdaLayer
+        - arn:aws:lambda:us-east-1:486140753397:layer:LogzioLambdaExtensionLogs:4
       Environment:
         Variables:
           API_URL: !Ref ApiURL
@@ -116,8 +121,22 @@ Resources:
           PASSWORD: !Ref Password
           EXPECTED_STATUS_CODE: !Ref ExpectedStatusCode
           EXPECTED_BODY: !Ref ExpectedBody
-          LOGZIO_URL: !Ref LogzioURL
-          LOGZIO_TOKEN: !Ref LogzioToken
+          LOGZIO_METRICS_LISTENER: !Join
+            - ''
+            - - !Ref LogzioListener
+              - ':8053'
+          LOGZIO_METRICS_TOKEN: !Ref LogzioMetricsToken
+          LOGZIO_LISTENER: !Join
+            - ''
+            - - !Ref LogzioListener
+              - ':8071'
+          LOGZIO_LOGS_TOKEN: !Ref LogzioLogsToken
+          LOGS_EXT_LOG_LEVEL: 'info'
+          ENABLE_EXTENSION_LOGS: 'false'
+          ENABLE_PLATFORM_LOGS: 'false'
+          GROK_PATTERNS: ''
+          LOGS_FORMAT: ''
+          CUSTOM_FIELDS: ''
   IAMRole:
     Type: 'AWS::IAM::Role'
     Properties:
@@ -143,17 +162,11 @@ Resources:
                   - 'logs:CreateLogStream'
                   - 'logs:PutLogEvents'
                 Resource: '*'
-  LambdaLayer:
-    Type: 'AWS::Lambda::LayerVersion'
-    Properties:
-      Content:
-        S3Bucket: logzio-aws-lambda-layers-us-east-1
-        S3Key: lambda-extensions-logs/layer.zip
   EventRule:
     Type: 'AWS::Events::Rule'
     Properties:
       Name: !Ref LambdaFunctionName
-      ScheduleExpression: !Ref CloudWatchEventScheduleExpression
+      ScheduleExpression: !Ref SchedulingInterval
       State: ENABLED
       Targets:
         - Arn: !GetAtt LambdaFunction.Arn
