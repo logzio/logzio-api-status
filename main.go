@@ -213,7 +213,7 @@ func (las *logzioApiStatus) createApiHttpRequest() (*http.Request, error) {
 	return request, nil
 }
 
-func (las *logzioApiStatus) getApiHttpResponse(request *http.Request) (*http.Response, int64, error) {
+func (las *logzioApiStatus) getApiHttpResponse(request *http.Request) (*http.Response, float64, error) {
 	debugLogger.Println("Getting API HTTP response...")
 
 	client := &http.Client{
@@ -222,7 +222,8 @@ func (las *logzioApiStatus) getApiHttpResponse(request *http.Request) (*http.Res
 	}
 	start := time.Now()
 	response, err := client.Do(request)
-	responseTime := time.Since(start).Milliseconds()
+	end := time.Now()
+	responseTime := float64(end.Sub(start)) / float64(time.Millisecond)
 
 	return response, responseTime, err
 }
@@ -331,8 +332,8 @@ func (las *logzioApiStatus) getSuccessStatusGaugeObserver(responseStatusCode int
 	return newInt64GaugeObserver(statusMetricName, observerCallback, statusObserverDescription)
 }
 
-func (las *logzioApiStatus) getResponseTimeGaugeObserver(responseTime int64) *int64GaugeObserver {
-	observerCallback := func(_ context.Context, result metric.Int64ObserverResult) {
+func (las *logzioApiStatus) getResponseTimeGaugeObserver(responseTime float64) *float64GaugeObserver {
+	observerCallback := func(_ context.Context, result metric.Float64ObserverResult) {
 		debugLogger.Println("Running response time observer callback...")
 
 		result.Observe(responseTime,
@@ -341,7 +342,7 @@ func (las *logzioApiStatus) getResponseTimeGaugeObserver(responseTime int64) *in
 			attribute.String("unit", "milliseconds"))
 	}
 
-	return newInt64GaugeObserver(responseTimeMetricName, observerCallback, "API response time")
+	return newFloat64GaugeObserver(responseTimeMetricName, observerCallback, "API response time")
 }
 
 func (las *logzioApiStatus) getResponseBodyLengthGaugeObserver(responseBodyLength int) *int64GaugeObserver {
