@@ -23,26 +23,48 @@ import (
 )
 
 const (
-	apiUrlEnvName                = "API_URL"
-	methodEnvName                = "METHOD"
-	headersEnvName               = "HEADERS"
-	bodyEnvName                  = "BODY"
-	bearerTokenEnvName           = "BEARER_TOKEN"
-	usernameEnvName              = "USERNAME"
-	passwordEnvName              = "PASSWORD"
-	apiResponseTimeoutEnvName    = "API_RESPONSE_TIMEOUT"
-	expectedStatusCodeEnvName    = "EXPECTED_STATUS_CODE"
-	expectedBodyEnvName          = "EXPECTED_BODY"
-	logzioMetricsListenerEnvName = "LOGZIO_METRICS_LISTENER"
-	logzioMetricsTokenEnvName    = "LOGZIO_METRICS_TOKEN"
-	awsRegionEnvName             = "AWS_REGION"
-	awsLambdaFunctionNameEnvName = "AWS_LAMBDA_FUNCTION_NAME"
-	meterName                    = "api_status"
-	statusMetricName             = meterName + "_status"
-	responseTimeMetricName       = meterName + "_response_time"
-	responseBodyLengthMetricName = meterName + "_response_body_length"
-	statusObserverDescription    = "API status"
-	statusMetricValue            = 1
+	apiUrlEnvName                                      = "API_URL"
+	methodEnvName                                      = "METHOD"
+	headersEnvName                                     = "HEADERS"
+	bodyEnvName                                        = "BODY"
+	bearerTokenEnvName                                 = "BEARER_TOKEN"
+	usernameEnvName                                    = "USERNAME"
+	passwordEnvName                                    = "PASSWORD"
+	apiResponseTimeoutEnvName                          = "API_RESPONSE_TIMEOUT"
+	expectedStatusCodeEnvName                          = "EXPECTED_STATUS_CODE"
+	expectedBodyEnvName                                = "EXPECTED_BODY"
+	logzioMetricsListenerEnvName                       = "LOGZIO_METRICS_LISTENER"
+	logzioMetricsTokenEnvName                          = "LOGZIO_METRICS_TOKEN"
+	awsRegionEnvName                                   = "AWS_REGION"
+	awsLambdaFunctionNameEnvName                       = "AWS_LAMBDA_FUNCTION_NAME"
+	meterName                                          = "api_status"
+	statusMetricName                                   = meterName + "_status"
+	responseTimeMetricName                             = meterName + "_response_time"
+	responseBodyLengthMetricName                       = meterName + "_response_body_length"
+	statusObserverDescription                          = "API status"
+	statusMetricValue                                  = 1
+	awsRegionLabelName                                 = "aws_region"
+	awsLambdaFunctionLabelName                         = "aws_lambda_function"
+	urlLabelName                                       = "url"
+	methodLabelName                                    = "method"
+	statusMetricStatusLabelName                        = "status"
+	responseTimeoutStatusMetricStatusLabelValue        = "response_timeout"
+	connectionFailedStatusMetricStatusLabelValue       = "connection_failed"
+	readResponseBodyFailedStatusMetricStatusLabelValue = "read_response_body_failed"
+	noMatchStatusCodeStatusMetricStatusLabelValue      = "no_match_status_code"
+	noMatchResponseBodyStatusMetricStatusLabelValue    = "no_match_response_body"
+	successStatusMetricStatusLabelValue                = "success"
+	statusMetricResponseTimeoutLabelName               = "response_timeout"
+	statusMetricResponseTimeoutUnitLabelName           = "response_timeout_unit"
+	statusMetricResponseTimeoutUnitLabelValue          = "seconds"
+	statusMetricErrorLabelName                         = "error"
+	statusMetricResponseStatusCodeLabelName            = "response_status_code"
+	statusMetricExpectedResponseStatusCodeLabelName    = "expected_response_status_code"
+	statusMetricResponseBodyLabelName                  = "response_body"
+	statusMetricExpectedResponseBodyLabelName          = "expected_response_body"
+	unitLabelName                                      = "unit"
+	responseTimeMetricUnitLabelValue                   = "milliseconds"
+	responseBodyLengthMetricUnitLabelValue             = "bytes"
 )
 
 var (
@@ -239,12 +261,12 @@ func (las *logzioApiStatus) getResponseErrorStatusGaugeObserver(responseError er
 			debugLogger.Println("Running response timeout status observer callback...")
 
 			result.Observe(statusMetricValue,
-				attribute.String("url", las.url),
-				attribute.String("method", las.method),
-				attribute.String("status", "response_timeout"),
-				attribute.Float64("response_timeout", float64(las.responseTimeout/time.Second)),
-				attribute.String("response_timeout_unit", "seconds"),
-				attribute.String("error", responseError.Error()))
+				attribute.String(urlLabelName, las.url),
+				attribute.String(methodLabelName, las.method),
+				attribute.String(statusMetricStatusLabelName, responseTimeoutStatusMetricStatusLabelValue),
+				attribute.Float64(statusMetricResponseTimeoutLabelName, float64(las.responseTimeout/time.Second)),
+				attribute.String(statusMetricResponseTimeoutUnitLabelName, statusMetricResponseTimeoutUnitLabelValue),
+				attribute.String(statusMetricErrorLabelName, responseError.Error()))
 		}
 
 		return newInt64GaugeObserver(statusMetricName, observerCallback, statusObserverDescription)
@@ -254,10 +276,10 @@ func (las *logzioApiStatus) getResponseErrorStatusGaugeObserver(responseError er
 		debugLogger.Println("Running connection failed status observer callback...")
 
 		result.Observe(statusMetricValue,
-			attribute.String("url", las.url),
-			attribute.String("method", las.method),
-			attribute.String("status", "connection_failed"),
-			attribute.String("error", responseError.Error()))
+			attribute.String(urlLabelName, las.url),
+			attribute.String(methodLabelName, las.method),
+			attribute.String(statusMetricStatusLabelName, connectionFailedStatusMetricStatusLabelValue),
+			attribute.String(statusMetricErrorLabelName, responseError.Error()))
 	}
 
 	return newInt64GaugeObserver(statusMetricName, observerCallback, statusObserverDescription)
@@ -273,11 +295,11 @@ func (las *logzioApiStatus) getReadResponseBodyErrorStatusGaugeObserver(response
 		debugLogger.Println("Running read response body failed status observer callback...")
 
 		result.Observe(statusMetricValue,
-			attribute.String("url", las.url),
-			attribute.String("method", las.method),
-			attribute.String("status", "read_response_body_failed"),
-			attribute.Int("response_status_code", responseStatusCode),
-			attribute.String("error", readResponseBodyError.Error()))
+			attribute.String(urlLabelName, las.url),
+			attribute.String(methodLabelName, las.method),
+			attribute.String(statusMetricStatusLabelName, readResponseBodyFailedStatusMetricStatusLabelValue),
+			attribute.Int(statusMetricResponseStatusCodeLabelName, responseStatusCode),
+			attribute.String(statusMetricErrorLabelName, readResponseBodyError.Error()))
 	}
 
 	return newInt64GaugeObserver(statusMetricName, observerCallback, statusObserverDescription)
@@ -289,11 +311,11 @@ func (las *logzioApiStatus) getNoMatchStatusGaugeObserver(responseStatusCode int
 			debugLogger.Println("Running no match status code status observer callback...")
 
 			result.Observe(statusMetricValue,
-				attribute.String("url", las.url),
-				attribute.String("method", las.method),
-				attribute.String("status", "no_match_status_code"),
-				attribute.Int("response_status_code", responseStatusCode),
-				attribute.Int("expected_response_status_code", las.expectedResponseStatusCode))
+				attribute.String(urlLabelName, las.url),
+				attribute.String(methodLabelName, las.method),
+				attribute.String(statusMetricStatusLabelName, noMatchStatusCodeStatusMetricStatusLabelValue),
+				attribute.Int(statusMetricResponseStatusCodeLabelName, responseStatusCode),
+				attribute.Int(statusMetricExpectedResponseStatusCodeLabelName, las.expectedResponseStatusCode))
 		}
 
 		return newInt64GaugeObserver(statusMetricName, observerCallback, statusObserverDescription)
@@ -304,12 +326,12 @@ func (las *logzioApiStatus) getNoMatchStatusGaugeObserver(responseStatusCode int
 			debugLogger.Println("Running no match response body status observer callback...")
 
 			result.Observe(statusMetricValue,
-				attribute.String("url", las.url),
-				attribute.String("method", las.method),
-				attribute.String("status", "no_match_response_body"),
-				attribute.Int("response_status_code", responseStatusCode),
-				attribute.String("response_body", string(responseBodyBytes)),
-				attribute.String("expected_response_body", las.expectedResponseBody))
+				attribute.String(urlLabelName, las.url),
+				attribute.String(methodLabelName, las.method),
+				attribute.String(statusMetricStatusLabelName, noMatchResponseBodyStatusMetricStatusLabelValue),
+				attribute.Int(statusMetricResponseStatusCodeLabelName, responseStatusCode),
+				attribute.String(statusMetricResponseBodyLabelName, string(responseBodyBytes)),
+				attribute.String(statusMetricExpectedResponseBodyLabelName, las.expectedResponseBody))
 		}
 
 		return newInt64GaugeObserver(statusMetricName, observerCallback, statusObserverDescription)
@@ -323,10 +345,10 @@ func (las *logzioApiStatus) getSuccessStatusGaugeObserver(responseStatusCode int
 	observerCallback := func(_ context.Context, result metric.Int64ObserverResult) {
 		debugLogger.Println("Running success status observer callback...")
 		result.Observe(statusMetricValue,
-			attribute.String("url", las.url),
-			attribute.String("method", las.method),
-			attribute.String("status", "success"),
-			attribute.Int("response_status_code", responseStatusCode))
+			attribute.String(urlLabelName, las.url),
+			attribute.String(methodLabelName, las.method),
+			attribute.String(statusMetricStatusLabelName, successStatusMetricStatusLabelValue),
+			attribute.Int(statusMetricResponseStatusCodeLabelName, responseStatusCode))
 	}
 
 	return newInt64GaugeObserver(statusMetricName, observerCallback, statusObserverDescription)
@@ -337,9 +359,9 @@ func (las *logzioApiStatus) getResponseTimeGaugeObserver(responseTime float64) *
 		debugLogger.Println("Running response time observer callback...")
 
 		result.Observe(responseTime,
-			attribute.String("url", las.url),
-			attribute.String("method", las.method),
-			attribute.String("unit", "milliseconds"))
+			attribute.String(urlLabelName, las.url),
+			attribute.String(methodLabelName, las.method),
+			attribute.String(unitLabelName, responseTimeMetricUnitLabelValue))
 	}
 
 	return newFloat64GaugeObserver(responseTimeMetricName, observerCallback, "API response time")
@@ -350,9 +372,9 @@ func (las *logzioApiStatus) getResponseBodyLengthGaugeObserver(responseBodyLengt
 		debugLogger.Println("Running response body length observer callback...")
 
 		result.Observe(int64(responseBodyLength),
-			attribute.String("url", las.url),
-			attribute.String("method", las.method),
-			attribute.String("unit", "bytes"))
+			attribute.String(urlLabelName, las.url),
+			attribute.String(methodLabelName, las.method),
+			attribute.String(unitLabelName, responseBodyLengthMetricUnitLabelValue))
 	}
 
 	return newInt64GaugeObserver(responseBodyLengthMetricName, observerCallback, "API response body length")
@@ -393,8 +415,8 @@ func (las *logzioApiStatus) createController() (*controller.Controller, error) {
 		controller.WithResource(
 			resource.NewWithAttributes(
 				semconv.SchemaURL,
-				attribute.String("aws_region", os.Getenv(awsRegionEnvName)),
-				attribute.String("aws_lambda_function", os.Getenv(awsLambdaFunctionNameEnvName)),
+				attribute.String(awsRegionLabelName, os.Getenv(awsRegionEnvName)),
+				attribute.String(awsLambdaFunctionLabelName, os.Getenv(awsLambdaFunctionNameEnvName)),
 			),
 		),
 	)

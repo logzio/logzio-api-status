@@ -95,7 +95,7 @@ func TestNewLogzioApiStatus_Success(t *testing.T) {
 	assert.Empty(t, apiStatus.bearerToken)
 	assert.Empty(t, apiStatus.username)
 	assert.Empty(t, apiStatus.password)
-	assert.Equal(t, 200, apiStatus.expectedResponseStatusCode)
+	assert.Equal(t, http.StatusOK, apiStatus.expectedResponseStatusCode)
 	assert.Equal(t, "success", apiStatus.expectedResponseBody)
 	assert.Equal(t, "https://listener.logz.io:8053", apiStatus.logzioMetricsListener)
 	assert.Equal(t, "123456789a", apiStatus.logzioMetricsToken)
@@ -472,7 +472,7 @@ func TestCreateApiHttpRequest_Success(t *testing.T) {
 		bearerToken:                "",
 		username:                   "",
 		password:                   "",
-		expectedResponseStatusCode: 200,
+		expectedResponseStatusCode: http.StatusOK,
 		expectedResponseBody:       "success",
 	}
 
@@ -490,7 +490,7 @@ func TestCreateApiHttpRequest_Success(t *testing.T) {
 	assert.Equal(t, http.MethodGet, request.Method)
 	assert.Equal(t, []string{"text/application"}, request.Header["Content-Type"])
 	assert.Equal(t, []string{"text/application"}, request.Header["Accept"])
-	assert.Equal(t, "test", string(bodyBytes))
+	assert.Equal(t, apiStatus.body, string(bodyBytes))
 }
 
 func TestGetApiHttpResponse(t *testing.T) {
@@ -506,7 +506,7 @@ func TestGetApiHttpResponse(t *testing.T) {
 		bearerToken:                "",
 		username:                   "",
 		password:                   "",
-		expectedResponseStatusCode: 200,
+		expectedResponseStatusCode: http.StatusOK,
 		expectedResponseBody:       "success",
 	}
 
@@ -517,8 +517,8 @@ func TestGetApiHttpResponse(t *testing.T) {
 	httpmock.Activate()
 	defer httpmock.DeactivateAndReset()
 
-	httpmock.RegisterResponder("GET", "https://example.api:1234",
-		httpmock.NewStringResponder(200, "success"))
+	httpmock.RegisterResponder(http.MethodGet, "https://example.api:1234",
+		httpmock.NewStringResponder(http.StatusOK, "success"))
 
 	response, responseTime, err := apiStatus.getApiHttpResponse(request)
 	require.NoError(t, err)
@@ -531,7 +531,7 @@ func TestGetApiHttpResponse(t *testing.T) {
 
 	defer closeResponseBody(response.Body)
 
-	assert.Equal(t, 200, response.StatusCode)
+	assert.Equal(t, http.StatusOK, response.StatusCode)
 	assert.Equal(t, "success", string(bodyBytes))
 }
 
@@ -548,7 +548,7 @@ func TestCreateController_Success(t *testing.T) {
 		bearerToken:                "",
 		username:                   "",
 		password:                   "",
-		expectedResponseStatusCode: 200,
+		expectedResponseStatusCode: http.StatusOK,
 		expectedResponseBody:       "success",
 	}
 
@@ -576,7 +576,7 @@ func TestCollectMetrics_AllMetrics(t *testing.T) {
 		bearerToken:                "",
 		username:                   "",
 		password:                   "",
-		expectedResponseStatusCode: 200,
+		expectedResponseStatusCode: http.StatusOK,
 		expectedResponseBody:       "success",
 	}
 
@@ -587,8 +587,8 @@ func TestCollectMetrics_AllMetrics(t *testing.T) {
 	httpmock.Activate()
 	defer httpmock.DeactivateAndReset()
 
-	httpmock.RegisterResponder("GET", "https://example.api:1234",
-		httpmock.NewStringResponder(200, "success"))
+	httpmock.RegisterResponder(http.MethodGet, "https://example.api:1234",
+		httpmock.NewStringResponder(http.StatusOK, "success"))
 
 	response, responseTime, err := apiStatus.getApiHttpResponse(request)
 	require.NoError(t, err)
@@ -602,12 +602,12 @@ func TestCollectMetrics_AllMetrics(t *testing.T) {
 	defer closeResponseBody(response.Body)
 
 	gaugeObservers := make([]metricRegister, 0)
-	statusGaugeObserver := apiStatus.getSuccessStatusGaugeObserver(200)
+	statusGaugeObserver := apiStatus.getSuccessStatusGaugeObserver(http.StatusOK)
 	responseTimeGaugeObserver := apiStatus.getResponseTimeGaugeObserver(responseTime)
 	responseBodyLengthGaugeObserver := apiStatus.getResponseBodyLengthGaugeObserver(len(bodyBytes))
 	gaugeObservers = append(gaugeObservers, statusGaugeObserver, responseTimeGaugeObserver, responseBodyLengthGaugeObserver)
 
-	httpmock.RegisterResponder("POST", "https://listener.logz.io:8053",
+	httpmock.RegisterResponder(http.MethodPost, "https://listener.logz.io:8053",
 		func(request *http.Request) (*http.Response, error) {
 			metrics, err := getMetrics(request)
 			require.NoError(t, err)
@@ -621,25 +621,25 @@ func TestCollectMetrics_AllMetrics(t *testing.T) {
 				if metric["__name__"] == statusMetricName {
 					assert.Len(t, metric, 8)
 					assert.Equal(t, float64(statusMetricValue), metric["value"])
-					assert.Equal(t, "success", metric["status"])
-					assert.Equal(t, "200", metric["response_status_code"])
+					assert.Equal(t, successStatusMetricStatusLabelValue, metric[statusMetricStatusLabelName])
+					assert.Equal(t, "200", metric[statusMetricResponseStatusCodeLabelName])
 				} else if metric["__name__"] == responseTimeMetricName {
 					assert.Len(t, metric, 7)
 					assert.Equal(t, responseTime, metric["value"])
-					assert.Equal(t, "milliseconds", metric["unit"])
+					assert.Equal(t, responseTimeMetricUnitLabelValue, metric[unitLabelName])
 				} else if metric["__name__"] == responseBodyLengthMetricName {
 					assert.Len(t, metric, 7)
 					assert.Equal(t, float64(len(bodyBytes)), metric["value"])
-					assert.Equal(t, "bytes", metric["unit"])
+					assert.Equal(t, responseBodyLengthMetricUnitLabelValue, metric[unitLabelName])
 				}
 
-				assert.Equal(t, apiStatus.url, metric["url"])
-				assert.Equal(t, apiStatus.method, metric["method"])
-				assert.Equal(t, "us-east-1", metric["aws_region"])
-				assert.Equal(t, "test", metric["aws_lambda_function"])
+				assert.Equal(t, apiStatus.url, metric[urlLabelName])
+				assert.Equal(t, apiStatus.method, metric[methodLabelName])
+				assert.Equal(t, "us-east-1", metric[awsRegionLabelName])
+				assert.Equal(t, "test", metric[awsLambdaFunctionLabelName])
 			}
 
-			return httpmock.NewStringResponse(200, ""), nil
+			return httpmock.NewStringResponse(http.StatusOK, ""), nil
 		})
 
 	err = apiStatus.collectMetrics(gaugeObservers)
@@ -685,10 +685,10 @@ func TestRun_SuccessStatus(t *testing.T) {
 	httpmock.Activate()
 	defer httpmock.DeactivateAndReset()
 
-	httpmock.RegisterResponder("GET", "https://example.api:1234",
-		httpmock.NewStringResponder(200, "success"))
+	httpmock.RegisterResponder(http.MethodGet, "https://example.api:1234",
+		httpmock.NewStringResponder(http.StatusOK, "success"))
 
-	httpmock.RegisterResponder("POST", "https://listener.logz.io:8053",
+	httpmock.RegisterResponder(http.MethodPost, "https://listener.logz.io:8053",
 		func(request *http.Request) (*http.Response, error) {
 			metrics, err := getMetrics(request)
 			require.NoError(t, err)
@@ -702,25 +702,25 @@ func TestRun_SuccessStatus(t *testing.T) {
 				if metric["__name__"] == statusMetricName {
 					assert.Len(t, metric, 8)
 					assert.Equal(t, float64(statusMetricValue), metric["value"])
-					assert.Equal(t, "success", metric["status"])
-					assert.Equal(t, "200", metric["response_status_code"])
+					assert.Equal(t, successStatusMetricStatusLabelValue, metric[statusMetricStatusLabelName])
+					assert.Equal(t, "200", metric[statusMetricResponseStatusCodeLabelName])
 				} else if metric["__name__"] == responseTimeMetricName {
 					assert.Len(t, metric, 7)
 					assert.NotEmpty(t, metric["value"])
-					assert.Equal(t, "milliseconds", metric["unit"])
+					assert.Equal(t, responseTimeMetricUnitLabelValue, metric[unitLabelName])
 				} else if metric["__name__"] == responseBodyLengthMetricName {
 					assert.Len(t, metric, 7)
 					assert.Equal(t, float64(len("success")), metric["value"])
-					assert.Equal(t, "bytes", metric["unit"])
+					assert.Equal(t, responseBodyLengthMetricUnitLabelValue, metric[unitLabelName])
 				}
 
-				assert.Equal(t, "https://example.api:1234", metric["url"])
-				assert.Equal(t, http.MethodGet, metric["method"])
-				assert.Equal(t, "us-east-1", metric["aws_region"])
-				assert.Equal(t, "test", metric["aws_lambda_function"])
+				assert.Equal(t, "https://example.api:1234", metric[urlLabelName])
+				assert.Equal(t, http.MethodGet, metric[methodLabelName])
+				assert.Equal(t, "us-east-1", metric[awsRegionLabelName])
+				assert.Equal(t, "test", metric[awsLambdaFunctionLabelName])
 			}
 
-			return httpmock.NewStringResponse(200, ""), nil
+			return httpmock.NewStringResponse(http.StatusOK, ""), nil
 		})
 
 	err = run(context.Background())
@@ -766,7 +766,7 @@ func TestRun_ConnectionFailedStatus(t *testing.T) {
 	httpmock.Activate()
 	defer httpmock.DeactivateAndReset()
 
-	httpmock.RegisterResponder("POST", "https://listener.logz.io:8053",
+	httpmock.RegisterResponder(http.MethodPost, "https://listener.logz.io:8053",
 		func(request *http.Request) (*http.Response, error) {
 			metrics, err := getMetrics(request)
 			require.NoError(t, err)
@@ -780,14 +780,14 @@ func TestRun_ConnectionFailedStatus(t *testing.T) {
 
 			assert.Equal(t, statusMetricName, metric["__name__"])
 			assert.Equal(t, float64(statusMetricValue), metric["value"])
-			assert.Equal(t, "https://example.api:1234", metric["url"])
-			assert.Equal(t, http.MethodGet, metric["method"])
-			assert.Equal(t, "connection_failed", metric["status"])
-			assert.NotEmpty(t, metric["error"])
-			assert.Equal(t, "us-east-1", metric["aws_region"])
-			assert.Equal(t, "test", metric["aws_lambda_function"])
+			assert.Equal(t, "https://example.api:1234", metric[urlLabelName])
+			assert.Equal(t, http.MethodGet, metric[methodLabelName])
+			assert.Equal(t, connectionFailedStatusMetricStatusLabelValue, metric[statusMetricStatusLabelName])
+			assert.NotEmpty(t, metric[statusMetricErrorLabelName])
+			assert.Equal(t, "us-east-1", metric[awsRegionLabelName])
+			assert.Equal(t, "test", metric[awsLambdaFunctionLabelName])
 
-			return httpmock.NewStringResponse(200, ""), nil
+			return httpmock.NewStringResponse(http.StatusOK, ""), nil
 		})
 
 	err = run(context.Background())
@@ -833,10 +833,10 @@ func TestRun_NoMatchStatusCodeStatus(t *testing.T) {
 	httpmock.Activate()
 	defer httpmock.DeactivateAndReset()
 
-	httpmock.RegisterResponder("GET", "https://example.api:1234",
-		httpmock.NewStringResponder(401, "success"))
+	httpmock.RegisterResponder(http.MethodGet, "https://example.api:1234",
+		httpmock.NewStringResponder(http.StatusUnauthorized, "success"))
 
-	httpmock.RegisterResponder("POST", "https://listener.logz.io:8053",
+	httpmock.RegisterResponder(http.MethodPost, "https://listener.logz.io:8053",
 		func(request *http.Request) (*http.Response, error) {
 			metrics, err := getMetrics(request)
 			require.NoError(t, err)
@@ -850,26 +850,26 @@ func TestRun_NoMatchStatusCodeStatus(t *testing.T) {
 				if metric["__name__"] == statusMetricName {
 					assert.Len(t, metric, 9)
 					assert.Equal(t, float64(statusMetricValue), metric["value"])
-					assert.Equal(t, "no_match_status_code", metric["status"])
-					assert.Equal(t, "401", metric["response_status_code"])
-					assert.Equal(t, "200", metric["expected_response_status_code"])
+					assert.Equal(t, noMatchStatusCodeStatusMetricStatusLabelValue, metric[statusMetricStatusLabelName])
+					assert.Equal(t, "401", metric[statusMetricResponseStatusCodeLabelName])
+					assert.Equal(t, "200", metric[statusMetricExpectedResponseStatusCodeLabelName])
 				} else if metric["__name__"] == responseTimeMetricName {
 					assert.Len(t, metric, 7)
 					assert.NotEmpty(t, metric["value"])
-					assert.Equal(t, "milliseconds", metric["unit"])
+					assert.Equal(t, responseTimeMetricUnitLabelValue, metric[unitLabelName])
 				} else if metric["__name__"] == responseBodyLengthMetricName {
 					assert.Len(t, metric, 7)
 					assert.Equal(t, float64(len("success")), metric["value"])
-					assert.Equal(t, "bytes", metric["unit"])
+					assert.Equal(t, responseBodyLengthMetricUnitLabelValue, metric[unitLabelName])
 				}
 
-				assert.Equal(t, "https://example.api:1234", metric["url"])
-				assert.Equal(t, http.MethodGet, metric["method"])
-				assert.Equal(t, "us-east-1", metric["aws_region"])
-				assert.Equal(t, "test", metric["aws_lambda_function"])
+				assert.Equal(t, "https://example.api:1234", metric[urlLabelName])
+				assert.Equal(t, http.MethodGet, metric[methodLabelName])
+				assert.Equal(t, "us-east-1", metric[awsRegionLabelName])
+				assert.Equal(t, "test", metric[awsLambdaFunctionLabelName])
 			}
 
-			return httpmock.NewStringResponse(200, ""), nil
+			return httpmock.NewStringResponse(http.StatusOK, ""), nil
 		})
 
 	err = run(context.Background())
@@ -915,10 +915,10 @@ func TestRun_NoMatchResponseBodyStatus(t *testing.T) {
 	httpmock.Activate()
 	defer httpmock.DeactivateAndReset()
 
-	httpmock.RegisterResponder("GET", "https://example.api:1234",
-		httpmock.NewStringResponder(200, "success"))
+	httpmock.RegisterResponder(http.MethodGet, "https://example.api:1234",
+		httpmock.NewStringResponder(http.StatusOK, "success"))
 
-	httpmock.RegisterResponder("POST", "https://listener.logz.io:8053",
+	httpmock.RegisterResponder(http.MethodPost, "https://listener.logz.io:8053",
 		func(request *http.Request) (*http.Response, error) {
 			metrics, err := getMetrics(request)
 			require.NoError(t, err)
@@ -932,27 +932,27 @@ func TestRun_NoMatchResponseBodyStatus(t *testing.T) {
 				if metric["__name__"] == statusMetricName {
 					assert.Len(t, metric, 10)
 					assert.Equal(t, float64(statusMetricValue), metric["value"])
-					assert.Equal(t, "no_match_response_body", metric["status"])
-					assert.Equal(t, "200", metric["response_status_code"])
-					assert.Equal(t, "success", metric["response_body"])
-					assert.Equal(t, "API is working", metric["expected_response_body"])
+					assert.Equal(t, noMatchResponseBodyStatusMetricStatusLabelValue, metric[statusMetricStatusLabelName])
+					assert.Equal(t, "200", metric[statusMetricResponseStatusCodeLabelName])
+					assert.Equal(t, "success", metric[statusMetricResponseBodyLabelName])
+					assert.Equal(t, "API is working", metric[statusMetricExpectedResponseBodyLabelName])
 				} else if metric["__name__"] == responseTimeMetricName {
 					assert.Len(t, metric, 7)
 					assert.NotEmpty(t, metric["value"])
-					assert.Equal(t, "milliseconds", metric["unit"])
+					assert.Equal(t, responseTimeMetricUnitLabelValue, metric[unitLabelName])
 				} else if metric["__name__"] == responseBodyLengthMetricName {
 					assert.Len(t, metric, 7)
 					assert.Equal(t, float64(len("success")), metric["value"])
-					assert.Equal(t, "bytes", metric["unit"])
+					assert.Equal(t, responseBodyLengthMetricUnitLabelValue, metric[unitLabelName])
 				}
 
-				assert.Equal(t, "https://example.api:1234", metric["url"])
-				assert.Equal(t, http.MethodGet, metric["method"])
-				assert.Equal(t, "us-east-1", metric["aws_region"])
-				assert.Equal(t, "test", metric["aws_lambda_function"])
+				assert.Equal(t, "https://example.api:1234", metric[urlLabelName])
+				assert.Equal(t, http.MethodGet, metric[methodLabelName])
+				assert.Equal(t, "us-east-1", metric[awsRegionLabelName])
+				assert.Equal(t, "test", metric[awsLambdaFunctionLabelName])
 			}
 
-			return httpmock.NewStringResponse(200, ""), nil
+			return httpmock.NewStringResponse(http.StatusOK, ""), nil
 		})
 
 	err = run(context.Background())
