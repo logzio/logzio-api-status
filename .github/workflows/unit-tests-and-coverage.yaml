@@ -5,6 +5,11 @@ on:
     branches:
       - master
   pull_request:
+    types:
+      - edited
+      - opened
+      - reopened
+      - synchronize
     branches:
       - master
 jobs:
