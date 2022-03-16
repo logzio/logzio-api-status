@@ -1,12 +1,11 @@
 name: upload auto-deployment and function zip files into AWS S3 bucket
 on:
   workflow_dispatch:
-  workflow_run:
-    workflows: ["unit tests and code-coverage"]
-    types:
-      - completed
+  push:
+    branches:
+      - master
 jobs:
-  deploy:
+  upload-files:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v2
