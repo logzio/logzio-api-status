@@ -1,36 +1,32 @@
-# This is a basic workflow to help you get started with Actions
-
-name: CI
-
-# Controls when the workflow will run
+name: upload auto-deployment and function zip files into AWS S3 bucket
 on:
-  # Triggers the workflow on push or pull request events but only for the master branch
-  push:
-    branches: [ master ]
-  pull_request:
-    branches: [ master ]
-
-  # Allows you to run this workflow manually from the Actions tab
   workflow_dispatch:
-
-# A workflow run is made up of one or more jobs that can run sequentially or in parallel
+  push:
+    branches:
+      - master
 jobs:
-  # This workflow contains a single job called "build"
-  build:
-    # The type of runner that the job will run on
+  upload-files:
     runs-on: ubuntu-latest
-
-    # Steps represent a sequence of tasks that will be executed as part of the job
     steps:
-      # Checks-out your repository under $GITHUB_WORKSPACE, so your job can access it
       - uses: actions/checkout@v2
-
-      # Runs a single command using the runners shell
-      - name: Run a one-line script
-        run: echo Hello, world!
-
-      # Runs a set of commands using the runners shell
-      - name: Run a multi-line script
+      - uses: actions/setup-go@v2
+        with:
+          go-version: '1.x'
+      - name: Build and zip binary file
         run: |
-          echo Add other actions to build,
-          echo test, and deploy your project.
+          GOOS=linux go build -o bootstrap main.go
+          zip function.zip ./bootstrap
+          cp function.zip ./aws
+      - name: Upload files into S3 bucket
+        run: |
+          cd action
+          go run run.go
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          AWS_REGION: us-east-1
+          BUCKET_NAME: logzio-aws-integrations-us-east-1
+          BUCKET_DIR: api-status-auto-deployment
+          SRC_DIR: ../aws
+          AUTO_DEPLOYMENT_FILE: auto-deployment.yaml
+          FUNCTION_ZIP_FILE: function.zip
