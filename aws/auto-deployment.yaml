@@ -11,7 +11,7 @@ Parameters:
   ApiURL:
     Type: String
     Description: >-
-      Your API URL to collect status from.
+      Your API URL to collect status from (for example: https://example.api:1234).
     MinLength: 1
   Method:
     Type: String
@@ -24,7 +24,8 @@ Parameters:
   Headers:
     Type: String
     Description: >-
-      Your API headers separated by comma and each header's key and value are separated by `=` (optional).
+      Your API headers separated by comma and each header's key and value are separated by `=`
+      (<<HEADER_KEY_1>>=<<HEADER_VALUE_1>>,<<HEADER_KEY_2>>=<<HEADER_VALUE_2>>) (optional).
   Body:
     Type: String
     Description: >-

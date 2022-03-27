@@ -15,7 +15,7 @@ To start just press the button and follow the instructions:
 
 | Parameter | Description | Required/Optional | Default |
 | --- | --- | --- | --- |
-| ApiURL | Your API URL to collect status from. | Required | - |
+| ApiURL | Your API URL to collect status from (for example: https://example.api:1234). | Required | - |
 | Method | Your API HTTP request method. Can be `GET` or `POST` | Required | `GET` |
 | ApiResponseTimeout | Your API response timeout (seconds). | Required | `10 (seconds)` |
 | ExpectedStatusCode | The expected HTTP response status code your API should return. | Required | `200` |
@@ -24,7 +24,7 @@ To start just press the button and follow the instructions:
 | LogzioMetricsToken | Your Logz.io metrics token (Can be retrieved from the Manage Token page). | Required | - |
 | LogzioLogsToken | Your Logz.io logs token (Can be retrieved from the Manage Token page). | Required | - |
 | SchedulingInterval | The scheduling expression that determines when and how often the Lambda function runs. | Required | `rate(30 minutes)` |
-| Headers | Your API headers separated by comma and each header's key and value are separated by `=`. | Optional | - |
+| Headers | Your API headers separated by comma and each header's key and value are separated by `=` (<<HEADER_KEY_1>>=<<HEADER_VALUE_1>>,<<HEADER_KEY_2>>=<<HEADER_VALUE_2>>). | Optional | - |
 | Body | Your API HTTP request body. | Optional | - |
 | BearerToken | Your API bearer token. | Optional | - |
 | Username | Your API username. | Optional | - |
