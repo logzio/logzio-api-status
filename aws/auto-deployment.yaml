@@ -25,7 +25,7 @@ Parameters:
     Type: String
     Description: >-
       Your API headers separated by comma and each header's key and value are separated by `=`
-      (<<HEADER_KEY_1>>=<<HEADER_VALUE_1>>,<<HEADER_KEY_2>>=<<HEADER_VALUE_2>>) (optional).
+      (header_key_1=header_value_1,header_key_2=header_value_2) (optional).
   Body:
     Type: String
     Description: >-
