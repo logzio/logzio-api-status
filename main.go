@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"fmt"
+	"github.com/aws/aws-lambda-go/cfn"
 	"io"
 	"log"
 	"net"
@@ -70,6 +71,7 @@ const (
 var (
 	debugLogger = log.New(os.Stdout, "DEBUG: ", log.Ldate|log.Ltime|log.Lshortfile)
 	infoLogger  = log.New(os.Stdout, "INFO: ", log.Ldate|log.Ltime|log.Lshortfile)
+	errorLogger = log.New(os.Stdout, "ERROR: ", log.Ldate|log.Ltime|log.Lshortfile)
 )
 
 type logzioApiStatus struct {
@@ -498,11 +500,26 @@ func closeResponseBody(responseBody io.ReadCloser) {
 	}
 }
 
-func HandleRequest(ctx context.Context) error {
+// Wrapper for first invocation from cloud formation custom resource
+func customResourceRun(ctx context.Context, event cfn.Event) (physicalResourceID string, data map[string]interface{}, err error) {
+	if err = run(ctx); err != nil {
+		errorLogger.Printf("Error in first running: %s", err.Error())
+	}
+
+	return
+}
+
+func HandleRequest(ctx context.Context, event cfn.Event) error {
 	infoLogger.Println("Starting to get API status...")
 
-	if err := run(ctx); err != nil {
-		return err
+	// If requestID is empty - the lambda call is not from a custom resource
+	if event.RequestID == "" {
+		if err := run(ctx); err != nil {
+			return err
+		}
+	} else {
+		// Custom resource invocation
+		lambda.Start(cfn.LambdaWrap(customResourceRun))
 	}
 
 	infoLogger.Println("API status has been sent to Logz.io successfully")

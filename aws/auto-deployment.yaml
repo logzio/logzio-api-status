@@ -87,7 +87,8 @@ Parameters:
     Type: String
     Description: >-
       The scheduling expression that determines when and how often the Lambda
-      function runs.
+      function runs. Rate below 6 minutes will cause the lambda to behave unexpectedly
+      due to cold start and custom resource invocation.
     Default: rate(30 minutes)
     MinLength: 1
     MaxLength: 256
@@ -179,3 +180,9 @@ Resources:
       Action: 'lambda:InvokeFunction'
       Principal: events.amazonaws.com
       SourceArn: !GetAtt EventRule.Arn
+  PrimerInvoke:
+    Type: 'AWS::CloudFormation::CustomResource'
+    DependsOn: LambdaFunction
+    Version: "1.0"
+    Properties:
+      ServiceToken: !GetAtt LambdaFunction.Arn
