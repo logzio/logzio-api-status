@@ -3,7 +3,6 @@ package main
 import (
 	"context"
 	"fmt"
-	"github.com/aws/aws-lambda-go/cfn"
 	"io"
 	"log"
 	"net"
@@ -14,6 +13,7 @@ import (
 	"strings"
 	"time"
 
+  "github.com/aws/aws-lambda-go/cfn"
 	"github.com/aws/aws-lambda-go/lambda"
 	metricsExporter "github.com/logzio/go-metrics-sdk"
 	"go.opentelemetry.io/otel/attribute"
