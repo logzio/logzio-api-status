@@ -23,7 +23,7 @@ To start just press the button and follow the instructions:
 | LogzioListener | The Logz.io listener URL for your region. (For more details, see the regions page: https://docs.logz.io/user-guide/accounts/account-region.html) | Required | `https://listener.logz.io` |
 | LogzioMetricsToken | Your Logz.io metrics token (Can be retrieved from the Manage Token page). | Required | - |
 | LogzioLogsToken | Your Logz.io logs token (Can be retrieved from the Manage Token page). | Required | - |
-| SchedulingInterval | The scheduling expression that determines when and how often the Lambda function runs. | Required | `rate(30 minutes)` |
+| SchedulingInterval | The scheduling expression that determines when and how often the Lambda function runs. Rate below 6 minutes will cause the lambda to behave unexpectedly due to cold start and custom resource invocation. | Required | `rate(30 minutes)` |
 | Headers | Your API headers separated by comma and each header's key and value are separated by `=` (`header_key_1=header_value_1,header_key_2=header_value_2`). | Optional | - |
 | Body | Your API HTTP request body. | Optional | - |
 | BearerToken | Your API bearer token. | Optional | - |
