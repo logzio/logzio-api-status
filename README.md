@@ -32,4 +32,9 @@ To start just press the button and follow the instructions:
 
 ## Searching in Logz.io
 
-All metrics that were sent from the Lambda function will have the prefix `api_status` in their name. 
+All metrics that were sent from the Lambda function will have the prefix `api_status` in their name.
+
+
+## Changlog
+
+- **1.1.0**: Add geohash to metrics
