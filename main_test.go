@@ -619,16 +619,16 @@ func TestCollectMetrics_AllMetrics(t *testing.T) {
 				assert.Contains(t, []string{statusMetricName, responseTimeMetricName, responseBodyLengthMetricName}, metric["__name__"])
 
 				if metric["__name__"] == statusMetricName {
-					assert.Len(t, metric, 8)
+					assert.Len(t, metric, 9)
 					assert.Equal(t, float64(statusMetricValue), metric["value"])
 					assert.Equal(t, successStatusMetricStatusLabelValue, metric[statusMetricStatusLabelName])
 					assert.Equal(t, "200", metric[statusMetricResponseStatusCodeLabelName])
 				} else if metric["__name__"] == responseTimeMetricName {
-					assert.Len(t, metric, 7)
+					assert.Len(t, metric, 8)
 					assert.Equal(t, responseTime, metric["value"])
 					assert.Equal(t, responseTimeMetricUnitLabelValue, metric[unitLabelName])
 				} else if metric["__name__"] == responseBodyLengthMetricName {
-					assert.Len(t, metric, 7)
+					assert.Len(t, metric, 8)
 					assert.Equal(t, float64(len(bodyBytes)), metric["value"])
 					assert.Equal(t, responseBodyLengthMetricUnitLabelValue, metric[unitLabelName])
 				}

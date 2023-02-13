@@ -524,7 +524,7 @@ func setRegionLocation() {
 			geoHash = geohash.Encode(location[latitudeIndex], location[longitudeIndex])
 
 		} else {
-			errorLogger.Printf("region %s is not mapped. geolocation will not be added\n")
+			errorLogger.Printf("region %s is not mapped. geolocation will not be added\n", awsRegion)
 		}
 	}
 }
