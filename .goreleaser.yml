@@ -1,0 +1,21 @@
+before:
+  hooks:
+builds:
+  - env:
+      - CGO_ENABLED=0
+    mod_timestamp: '{{ .CommitTimestamp }}'
+    flags:
+      - -trimpath
+    ldflags:
+      - '-s -w -X main.version={{.Version}} -X main.commit={{.Commit}}'
+    goos:
+      - linux
+    goarch:
+      - amd64
+    binary: 'bootstrap'
+archives:
+  - format: zip
+    name_template: '{{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}'
+release:
+changelog:
+  skip: true

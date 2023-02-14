@@ -97,8 +97,8 @@ Resources:
     Type: 'AWS::Lambda::Function'
     Properties:
       Code:
-        S3Bucket: logzio-aws-integrations-us-east-1
-        S3Key: api-status-auto-deployment/function.zip
+        S3Bucket: logzio-aws-integrations-<<REGION>>
+        S3Key: api-status-auto-deployment/<<VERSION>>/function.zip
       FunctionName: !Ref LambdaFunctionName
       Description: >-
         Lambda function for collecting API status metrics and sending

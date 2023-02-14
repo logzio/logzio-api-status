@@ -600,7 +600,7 @@ func TestCollectMetrics_AllMetrics(t *testing.T) {
 	require.NotNil(t, bodyBytes)
 
 	defer closeResponseBody(response.Body)
-
+	setRegionLocation()
 	gaugeObservers := make([]metricRegister, 0)
 	statusGaugeObserver := apiStatus.getSuccessStatusGaugeObserver(http.StatusOK)
 	responseTimeGaugeObserver := apiStatus.getResponseTimeGaugeObserver(responseTime)
@@ -619,16 +619,16 @@ func TestCollectMetrics_AllMetrics(t *testing.T) {
 				assert.Contains(t, []string{statusMetricName, responseTimeMetricName, responseBodyLengthMetricName}, metric["__name__"])
 
 				if metric["__name__"] == statusMetricName {
-					assert.Len(t, metric, 8)
+					assert.Len(t, metric, 9)
 					assert.Equal(t, float64(statusMetricValue), metric["value"])
 					assert.Equal(t, successStatusMetricStatusLabelValue, metric[statusMetricStatusLabelName])
 					assert.Equal(t, "200", metric[statusMetricResponseStatusCodeLabelName])
 				} else if metric["__name__"] == responseTimeMetricName {
-					assert.Len(t, metric, 7)
+					assert.Len(t, metric, 8)
 					assert.Equal(t, responseTime, metric["value"])
 					assert.Equal(t, responseTimeMetricUnitLabelValue, metric[unitLabelName])
 				} else if metric["__name__"] == responseBodyLengthMetricName {
-					assert.Len(t, metric, 7)
+					assert.Len(t, metric, 8)
 					assert.Equal(t, float64(len(bodyBytes)), metric["value"])
 					assert.Equal(t, responseBodyLengthMetricUnitLabelValue, metric[unitLabelName])
 				}
@@ -637,6 +637,7 @@ func TestCollectMetrics_AllMetrics(t *testing.T) {
 				assert.Equal(t, apiStatus.method, metric[methodLabelName])
 				assert.Equal(t, "us-east-1", metric[awsRegionLabelName])
 				assert.Equal(t, "test", metric[awsLambdaFunctionLabelName])
+				assert.Equal(t, "dq8xb82h008k", metric[geoHashLabelName])
 			}
 
 			return httpmock.NewStringResponse(http.StatusOK, ""), nil
@@ -651,7 +652,7 @@ func TestCollectMetrics_AllMetrics(t *testing.T) {
 func TestRun_SuccessStatus(t *testing.T) {
 	err := os.Setenv(awsRegionEnvName, "us-east-1")
 	require.NoError(t, err)
-
+	setRegionLocation()
 	err = os.Setenv(awsLambdaFunctionNameEnvName, "test")
 	require.NoError(t, err)
 
@@ -700,16 +701,16 @@ func TestRun_SuccessStatus(t *testing.T) {
 				assert.Contains(t, []string{statusMetricName, responseTimeMetricName, responseBodyLengthMetricName}, metric["__name__"])
 
 				if metric["__name__"] == statusMetricName {
-					assert.Len(t, metric, 8)
+					assert.Len(t, metric, 9)
 					assert.Equal(t, float64(statusMetricValue), metric["value"])
 					assert.Equal(t, successStatusMetricStatusLabelValue, metric[statusMetricStatusLabelName])
 					assert.Equal(t, "200", metric[statusMetricResponseStatusCodeLabelName])
 				} else if metric["__name__"] == responseTimeMetricName {
-					assert.Len(t, metric, 7)
+					assert.Len(t, metric, 8)
 					assert.NotEmpty(t, metric["value"])
 					assert.Equal(t, responseTimeMetricUnitLabelValue, metric[unitLabelName])
 				} else if metric["__name__"] == responseBodyLengthMetricName {
-					assert.Len(t, metric, 7)
+					assert.Len(t, metric, 8)
 					assert.Equal(t, float64(len("success")), metric["value"])
 					assert.Equal(t, responseBodyLengthMetricUnitLabelValue, metric[unitLabelName])
 				}
@@ -718,6 +719,7 @@ func TestRun_SuccessStatus(t *testing.T) {
 				assert.Equal(t, http.MethodGet, metric[methodLabelName])
 				assert.Equal(t, "us-east-1", metric[awsRegionLabelName])
 				assert.Equal(t, "test", metric[awsLambdaFunctionLabelName])
+				assert.Equal(t, "dq8xb82h008k", metric[geoHashLabelName])
 			}
 
 			return httpmock.NewStringResponse(http.StatusOK, ""), nil
@@ -732,7 +734,7 @@ func TestRun_SuccessStatus(t *testing.T) {
 func TestRun_ConnectionFailedStatus(t *testing.T) {
 	err := os.Setenv(awsRegionEnvName, "us-east-1")
 	require.NoError(t, err)
-
+	setRegionLocation()
 	err = os.Setenv(awsLambdaFunctionNameEnvName, "test")
 	require.NoError(t, err)
 
@@ -776,7 +778,7 @@ func TestRun_ConnectionFailedStatus(t *testing.T) {
 
 			metric := metrics[0]
 
-			assert.Len(t, metric, 8)
+			assert.Len(t, metric, 9)
 
 			assert.Equal(t, statusMetricName, metric["__name__"])
 			assert.Equal(t, float64(statusMetricValue), metric["value"])
@@ -786,6 +788,7 @@ func TestRun_ConnectionFailedStatus(t *testing.T) {
 			assert.NotEmpty(t, metric[statusMetricErrorLabelName])
 			assert.Equal(t, "us-east-1", metric[awsRegionLabelName])
 			assert.Equal(t, "test", metric[awsLambdaFunctionLabelName])
+			assert.Equal(t, "dq8xb82h008k", metric[geoHashLabelName])
 
 			return httpmock.NewStringResponse(http.StatusOK, ""), nil
 		})
@@ -799,7 +802,7 @@ func TestRun_ConnectionFailedStatus(t *testing.T) {
 func TestRun_NoMatchStatusCodeStatus(t *testing.T) {
 	err := os.Setenv(awsRegionEnvName, "us-east-1")
 	require.NoError(t, err)
-
+	setRegionLocation()
 	err = os.Setenv(awsLambdaFunctionNameEnvName, "test")
 	require.NoError(t, err)
 
@@ -848,17 +851,17 @@ func TestRun_NoMatchStatusCodeStatus(t *testing.T) {
 				assert.Contains(t, []string{statusMetricName, responseTimeMetricName, responseBodyLengthMetricName}, metric["__name__"])
 
 				if metric["__name__"] == statusMetricName {
-					assert.Len(t, metric, 9)
+					assert.Len(t, metric, 10)
 					assert.Equal(t, float64(statusMetricValue), metric["value"])
 					assert.Equal(t, noMatchStatusCodeStatusMetricStatusLabelValue, metric[statusMetricStatusLabelName])
 					assert.Equal(t, "401", metric[statusMetricResponseStatusCodeLabelName])
 					assert.Equal(t, "200", metric[statusMetricExpectedResponseStatusCodeLabelName])
 				} else if metric["__name__"] == responseTimeMetricName {
-					assert.Len(t, metric, 7)
+					assert.Len(t, metric, 8)
 					assert.NotEmpty(t, metric["value"])
 					assert.Equal(t, responseTimeMetricUnitLabelValue, metric[unitLabelName])
 				} else if metric["__name__"] == responseBodyLengthMetricName {
-					assert.Len(t, metric, 7)
+					assert.Len(t, metric, 8)
 					assert.Equal(t, float64(len("success")), metric["value"])
 					assert.Equal(t, responseBodyLengthMetricUnitLabelValue, metric[unitLabelName])
 				}
@@ -867,6 +870,7 @@ func TestRun_NoMatchStatusCodeStatus(t *testing.T) {
 				assert.Equal(t, http.MethodGet, metric[methodLabelName])
 				assert.Equal(t, "us-east-1", metric[awsRegionLabelName])
 				assert.Equal(t, "test", metric[awsLambdaFunctionLabelName])
+				assert.Equal(t, "dq8xb82h008k", metric[geoHashLabelName])
 			}
 
 			return httpmock.NewStringResponse(http.StatusOK, ""), nil
@@ -881,7 +885,7 @@ func TestRun_NoMatchStatusCodeStatus(t *testing.T) {
 func TestRun_NoMatchResponseBodyStatus(t *testing.T) {
 	err := os.Setenv(awsRegionEnvName, "us-east-1")
 	require.NoError(t, err)
-
+	setRegionLocation()
 	err = os.Setenv(awsLambdaFunctionNameEnvName, "test")
 	require.NoError(t, err)
 
@@ -930,18 +934,18 @@ func TestRun_NoMatchResponseBodyStatus(t *testing.T) {
 				assert.Contains(t, []string{statusMetricName, responseTimeMetricName, responseBodyLengthMetricName}, metric["__name__"])
 
 				if metric["__name__"] == statusMetricName {
-					assert.Len(t, metric, 10)
+					assert.Len(t, metric, 11)
 					assert.Equal(t, float64(statusMetricValue), metric["value"])
 					assert.Equal(t, noMatchResponseBodyStatusMetricStatusLabelValue, metric[statusMetricStatusLabelName])
 					assert.Equal(t, "200", metric[statusMetricResponseStatusCodeLabelName])
 					assert.Equal(t, "success", metric[statusMetricResponseBodyLabelName])
 					assert.Equal(t, "API is working", metric[statusMetricExpectedResponseBodyLabelName])
 				} else if metric["__name__"] == responseTimeMetricName {
-					assert.Len(t, metric, 7)
+					assert.Len(t, metric, 8)
 					assert.NotEmpty(t, metric["value"])
 					assert.Equal(t, responseTimeMetricUnitLabelValue, metric[unitLabelName])
 				} else if metric["__name__"] == responseBodyLengthMetricName {
-					assert.Len(t, metric, 7)
+					assert.Len(t, metric, 8)
 					assert.Equal(t, float64(len("success")), metric["value"])
 					assert.Equal(t, responseBodyLengthMetricUnitLabelValue, metric[unitLabelName])
 				}
@@ -950,6 +954,7 @@ func TestRun_NoMatchResponseBodyStatus(t *testing.T) {
 				assert.Equal(t, http.MethodGet, metric[methodLabelName])
 				assert.Equal(t, "us-east-1", metric[awsRegionLabelName])
 				assert.Equal(t, "test", metric[awsLambdaFunctionLabelName])
+				assert.Equal(t, "dq8xb82h008k", metric[geoHashLabelName])
 			}
 
 			return httpmock.NewStringResponse(http.StatusOK, ""), nil

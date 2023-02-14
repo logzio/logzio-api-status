@@ -13,9 +13,10 @@ import (
 	"strings"
 	"time"
 
-  "github.com/aws/aws-lambda-go/cfn"
+	"github.com/aws/aws-lambda-go/cfn"
 	"github.com/aws/aws-lambda-go/lambda"
 	metricsExporter "github.com/logzio/go-metrics-sdk"
+	"github.com/mmcloughlin/geohash"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/metric"
 	controller "go.opentelemetry.io/otel/sdk/metric/controller/basic"
@@ -66,12 +67,36 @@ const (
 	unitLabelName                                      = "unit"
 	responseTimeMetricUnitLabelValue                   = "milliseconds"
 	responseBodyLengthMetricUnitLabelValue             = "bytes"
+	geoHashLabelName                                   = "geohash"
+	longitudeIndex                                     = 0
+	latitudeIndex                                      = 1
 )
 
 var (
-	debugLogger = log.New(os.Stdout, "DEBUG: ", log.Ldate|log.Ltime|log.Lshortfile)
-	infoLogger  = log.New(os.Stdout, "INFO: ", log.Ldate|log.Ltime|log.Lshortfile)
-	errorLogger = log.New(os.Stdout, "ERROR: ", log.Ldate|log.Ltime|log.Lshortfile)
+	debugLogger         = log.New(os.Stdout, "DEBUG: ", log.Ldate|log.Ltime|log.Lshortfile)
+	infoLogger          = log.New(os.Stdout, "INFO: ", log.Ldate|log.Ltime|log.Lshortfile)
+	errorLogger         = log.New(os.Stdout, "ERROR: ", log.Ldate|log.Ltime|log.Lshortfile)
+	regionToGeoLocation = map[string][]float64{
+		"us-east-1":      {-78.024902, 37.926868},  // N. Virginia
+		"us-east-2":      {-82.996216, 40.367474},  // Ohio
+		"us-west-1":      {-119.417931, 36.778259}, // N. California
+		"us-west-2":      {-120.500000, 44.000000}, // Oregon
+		"ap-south-1":     {72.877426, 19.076090},   // Mumbai
+		"ap-northeast-3": {135.484802, 34.672314},  // Osaka
+		"ap-northeast-2": {127.024612, 37.532600},  // Seoul
+		"ap-southeast-1": {103.851959, 1.290270},   // Singapore
+		"ap-southeast-2": {151.209900, -33.865143}, // Sydney
+		"ap-northeast-1": {139.839478, 35.652832},  // Tokyo
+		"ca-central-1":   {-73.561668, 45.508888},  // Canada Central
+		"eu-central-1":   {8.682127, 50.110924},    // Frankfurt
+		"eu-west-1":      {-6.266155, 53.350140},   // Ireland
+		"eu-west-2":      {-0.118092, 51.509865},   // London
+		"eu-west-3":      {2.349014, 48.864716},    // Paris
+		"eu-north-1":     {18.063240, 59.334591},   // Stockholm
+		"sa-east-1":      {-46.625290, -23.533773}, // Sao Paulo
+	}
+	awsRegion string
+	geoHash   string
 )
 
 type logzioApiStatus struct {
@@ -417,8 +442,9 @@ func (las *logzioApiStatus) createController() (*controller.Controller, error) {
 		controller.WithResource(
 			resource.NewWithAttributes(
 				semconv.SchemaURL,
-				attribute.String(awsRegionLabelName, os.Getenv(awsRegionEnvName)),
+				attribute.String(awsRegionLabelName, awsRegion),
 				attribute.String(awsLambdaFunctionLabelName, os.Getenv(awsLambdaFunctionNameEnvName)),
+				attribute.String(geoHashLabelName, geoHash),
 			),
 		),
 	)
@@ -446,6 +472,7 @@ func (las *logzioApiStatus) collectMetrics(metricRegisters []metricRegister) err
 }
 
 func run(ctx context.Context) error {
+	setRegionLocation()
 	gaugeObservers := make([]metricRegister, 0)
 	apiStatus, err := newLogzioApiStatus(ctx)
 	if err != nil {
@@ -488,6 +515,20 @@ func run(ctx context.Context) error {
 	return apiStatus.collectMetrics(gaugeObservers)
 }
 
+func setRegionLocation() {
+	awsRegion = os.Getenv(awsRegionEnvName)
+	if awsRegion == "" {
+		errorLogger.Print("Could not get aws region. geolocation will not be added\nֿ")
+	} else {
+		if location, ok := regionToGeoLocation[awsRegion]; ok {
+			geoHash = geohash.Encode(location[latitudeIndex], location[longitudeIndex])
+
+		} else {
+			errorLogger.Printf("Region %s is not mapped. Geolocation will not be added\n", awsRegion)
+		}
+	}
+}
+
 func handleErr(err error) {
 	if err != nil {
 		panic(fmt.Errorf("something went wrong: %v", err))
@@ -509,13 +550,13 @@ func customResourceRun(ctx context.Context, event cfn.Event) (physicalResourceID
 	return
 }
 
-func HandleRequest(ctx context.Context, event cfn.Event) error {
+func HandleRequest(ctx context.Context, event cfn.Event) (string, error) {
 	infoLogger.Println("Starting to get API status...")
 
 	// If requestID is empty - the lambda call is not from a custom resource
 	if event.RequestID == "" {
 		if err := run(ctx); err != nil {
-			return err
+			return "lambda finished", err
 		}
 	} else {
 		// Custom resource invocation
@@ -523,7 +564,7 @@ func HandleRequest(ctx context.Context, event cfn.Event) error {
 	}
 
 	infoLogger.Println("API status has been sent to Logz.io successfully")
-	return nil
+	return "lambda finished", nil
 }
 
 func main() {
