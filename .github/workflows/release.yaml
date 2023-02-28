@@ -62,13 +62,19 @@ jobs:
           cp ./aws/auto-deployment.yaml ./sam-template-${{ matrix.aws_region }}.yaml
           sed -i "s/<<VERSION>>/${{ github.event.release.tag_name }}/" "./sam-template-${{ matrix.aws_region }}.yaml"
           sed -i "s/<<REGION>>/${{ matrix.aws_region }}/" "./sam-template-${{ matrix.aws_region }}.yaml"
-      - name: Upload to aws
+      - name: download and configure aws
         run: |
           sudo apt-get update
           sudo apt-get install awscli
           aws configure set aws_access_key_id ${{ secrets.AWS_ACCESS_KEY_ID }}
           aws configure set aws_secret_access_key ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           aws configure set region ${{ matrix.aws_region }}
+      - name: configure layer version in cloudformation template
+        run: |
+          ARN=$(aws lambda list-layer-versions --layer-name LogzioLambdaExtensionLogs --region ${{ matrix.aws_region }} --query 'LayerVersions[0].LayerVersionArn') \
+          && sed -i "s/<<LAYER-ARN>>/$ARN/" "./sam-template-${{ matrix.aws_region }}.yaml"
+      - name: Upload to aws
+        run: |
           aws s3 cp ./sam-template-${{ matrix.aws_region }}.yaml s3://logzio-aws-integrations-${{ matrix.aws_region }}/api-status-auto-deployment/${{ github.event.release.tag_name }}/sam-template.yaml --acl public-read
           aws s3 cp ./function.zip s3://logzio-aws-integrations-${{ matrix.aws_region }}/api-status-auto-deployment/${{ github.event.release.tag_name }}/function.zip --acl public-read
       - name: Clean
