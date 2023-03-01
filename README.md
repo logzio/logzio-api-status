@@ -55,5 +55,6 @@ All metrics that were sent from the Lambda function will have the prefix `api_st
 
 ## Changlog
 
+- **1.1.2**: Fix layer versions in regions.
 - **1.1.1**: Fix cloudformation template - Lambda layer
 - **1.1.0**: Add geohash to metrics
