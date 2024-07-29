@@ -9,7 +9,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Check out the repo
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
       - run: git fetch --force --tags
       - uses: actions/setup-go@v5
         with:
@@ -54,7 +54,7 @@ jobs:
           - 'ca-central-1'
     steps:
       - name: Check out the repo
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
       - name: download zip
         run: wget -c https://github.com/logzio/logzio-api-status/releases/download/${{ github.event.release.tag_name }}/logzio-api-status_${{ github.event.release.tag_name }}_linux_amd64.zip -O function.zip
       - name: create new version
