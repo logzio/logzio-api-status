@@ -9,7 +9,7 @@ require (
 	github.com/logzio/go-metrics-sdk v1.0.0
 	github.com/mmcloughlin/geohash v0.10.0
 	github.com/prometheus/prometheus v1.8.2-0.20220117154355-4855a0c067e2
-	github.com/stretchr/testify v1.7.0
+	github.com/stretchr/testify v1.9.0
 	go.opentelemetry.io/otel v1.4.1
 	go.opentelemetry.io/otel/metric v0.27.0
 	go.opentelemetry.io/otel/sdk v1.4.1
@@ -25,5 +25,5 @@ require (
 	go.opentelemetry.io/otel/internal/metric v0.27.0 // indirect
 	go.opentelemetry.io/otel/trace v1.4.1 // indirect
 	golang.org/x/sys v0.0.0-20220227234510-4e6760a101f9 // indirect
-	gopkg.in/yaml.v3 v3.0.0-20210107192922-496545a6307b // indirect
+	gopkg.in/yaml.v3 v3.0.1 // indirect
 )
