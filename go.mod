@@ -4,7 +4,7 @@ go 1.18
 
 require (
 	github.com/aws/aws-lambda-go v1.28.0
-	github.com/golang/snappy v0.0.4
+	github.com/golang/snappy v1.0.0
 	github.com/jarcoal/httpmock v1.1.0
 	github.com/logzio/go-metrics-sdk v1.0.0
 	github.com/mmcloughlin/geohash v0.10.0
