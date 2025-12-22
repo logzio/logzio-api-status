@@ -55,6 +55,7 @@ All metrics that were sent from the Lambda function will have the prefix `api_st
 
 ## Changlog
 
+- **1.1.4**: ci: Fix release workflow
 - **1.1.3**: ci: use static `LogzioLambdaExtensionLogs` version
 - **1.1.2**: Fix layer versions in regions.
 - **1.1.1**: Fix cloudformation template - Lambda layer
