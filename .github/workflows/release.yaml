@@ -71,8 +71,8 @@ jobs:
           aws configure set region ${{ matrix.aws_region }}
       - name: configure layer version in cloudformation template
         run: |
-          ARN=$(aws lambda list-layer-versions --layer-name LogzioLambdaExtensionLogs --region ${{ matrix.aws_region }} --query 'LayerVersions[0].LayerVersionArn') \
-          && sed -i "s/<<LAYER-ARN>>/$ARN/" "./sam-template-${{ matrix.aws_region }}.yaml"
+          LAYER_ARN="arn:aws:lambda:${{ matrix.aws_region }}:486140753397:layer:LogzioLambdaExtensionLogs:19"
+          sed -i "s|<<LAYER-ARN>>|$LAYER_ARN|" "./sam-template-${{ matrix.aws_region }}.yaml"
       - name: Upload to aws
         run: |
           aws s3 cp ./sam-template-${{ matrix.aws_region }}.yaml s3://logzio-aws-integrations-${{ matrix.aws_region }}/api-status-auto-deployment/${{ github.event.release.tag_name }}/sam-template.yaml --acl public-read
